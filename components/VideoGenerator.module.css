@@ -1,0 +1,61 @@
+.container {
+    padding: 20px;
+    background-color: #1c2230;
+    color: white;
+    max-width: 800px;
+    margin: 0 auto;
+    border-radius: 10px;
+    width: 40vw;
+  }
+  
+  .container h2 {
+    margin-top: 20px;
+    color: #ffffff;
+  }
+  
+  .container label {
+    display: block;
+    margin: 10px 0 5px;
+    color: #ccc;
+  }
+  
+  .container select, 
+  .container button {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+    border: none;
+    background: #2a2f3a;
+    color: #fff;
+  }
+  
+  .container button {
+    background: #4a90e2;
+    cursor: pointer;
+  }
+  
+  .loading-card {
+    padding: 20px;
+    background-color: #333;
+    color: #fff;
+    border-radius: 5px;
+    text-align: center;
+  }
+  
+  .error-message {
+    padding: 20px;
+    background-color: #e74c3c;
+    color: #fff;
+    border-radius: 5px;
+    text-align: center;
+  }
+  
+  .video-result {
+    padding: 20px;
+    background-color: #2ecc71;
+    color: #fff;
+    border-radius: 5px;
+    text-align: center;
+  }
+  
