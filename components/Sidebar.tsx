@@ -7,8 +7,8 @@ export default function Sidebar() {
       <div className="logo">
         <h1>Shorts.lol</h1>
       </div>
-      <nav>
-        <Link href="/musicVideoGenerator" className="nav-link">
+      <nav className='flex flex-col gap-2 border-t border-b border-gray-300 pt-2 pb-2'>
+        <Link  href="/musicVideoGenerator" className="nav-link ">
           Generate Video
         </Link>
         <Link href="/my-creations" className="nav-link">
@@ -61,7 +61,7 @@ export default function Sidebar() {
           color: #4a90e2;
         }
         .upgrade-section {
-          background: #1c2230;
+          background: #0f172a;
           padding: 15px;
           border-radius: 10px;
           text-align: center;

@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import path from 'path';
 import axios from 'axios';
 
-const FREESOUND_API_KEY = '0W2Oy6PMmYRnIPG96uwoN9SIA9R5sArjZURKZTm2'; // Replace with your actual Freesound API key
+const FREESOUND_API_KEY = process.env.FREESOUND_API; // Replace with your actual Freesound API key
 
 export async function POST(req) {
   try {

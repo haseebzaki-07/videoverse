@@ -1,61 +1,120 @@
 .container {
-    padding: 20px;
-    background-color: #1c2230;
-    color: white;
-    max-width: 800px;
-    margin: 0 auto;
-    border-radius: 10px;
-    width: 40vw;
-  }
-  
-  .container h2 {
-    margin-top: 20px;
-    color: #ffffff;
-  }
-  
-  .container label {
-    display: block;
-    margin: 10px 0 5px;
-    color: #ccc;
-  }
-  
-  .container select, 
-  .container button {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 20px;
-    border-radius: 5px;
-    border: none;
-    background: #2a2f3a;
-    color: #fff;
-  }
-  
-  .container button {
-    background: #4a90e2;
-    cursor: pointer;
-  }
-  
-  .loading-card {
-    padding: 20px;
-    background-color: #333;
-    color: #fff;
-    border-radius: 5px;
-    text-align: center;
-  }
-  
-  .error-message {
-    padding: 20px;
-    background-color: #e74c3c;
-    color: #fff;
-    border-radius: 5px;
-    text-align: center;
-  }
-  
-  .video-result {
-    padding: 20px;
-    background-color: #2ecc71;
-    color: #fff;
-    border-radius: 5px;
-    text-align: center;
-  }
-  
+  padding: 20px;
+  background-color: #0f172a;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  margin-left: 9vw;
+}
+
+
+.container .heading {
+  color: #f1e7e7;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.container .label {
+  display: block;
+  margin: 10px 0 5px;
+  font-size: 14px;         /* Adjust the font size */
+  color: #f3ebeb;          /* Light color for visibility */
+  font-weight: 500;        /* Slightly bolder text */
+  text-transform: capitalize; /* Optional: Capitalize the first letter of each word */
+}
+.container select {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  border-radius: 5px;
+  border: 1px solid #2563eb;    /* Border with light blue color */
+  background-color: #2d3748;    /* Dark background for the dropdown */
+  color: #ffffff;               /* White text color */
+  font-size: 14px;       
+  overflow-y: scroll;        /* Adjust font size */
+}
+
+.container select:focus {
+  border-color: #4f86e2;        /* Blue border on focus */
+  outline: none;                /* Removes default focus outline */
+}
+.container .stylesContainer {
+  display: flex;
+  gap: 15px;
+  margin: 15px 0;
+}
+
+.container .styleOption {
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 5px;
+  text-align: center;
+  transition: border 0.3s ease;
+}
+
+.container .stylesContainer .styleOption img {
+  width: 100%;          /* Make image take up the full width of its container */
+  height: auto;         /* Maintain aspect ratio */
+  max-width: 150px;     /* Maximum width */
+  max-height: 150px;    /* Maximum height */
+  object-fit: cover;    /* Ensures the image covers the area without distortion */
+}
+.container .styleOption img {
+  max-width: 100%;
+  border-radius: 10px;
+}
+
+.container .styleOption p {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.container .styleOption:hover, .container .styleOption.selected {
+  border-color: #2563eb;
+}
+
+.container .generateButton {
+  background-color: #2563eb;
+  color: #ffffff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 20px;
+}
+
+.container .generateButton:hover {
+  background-color: #1e40af;
+}
+
+.container .loadingCard {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #569ad5;
+  color: rgb(214, 194, 194);
+  border-radius: 5px;
+}
+
+.container .errorMessage {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #ef4444;
+  color: white;
+  border-radius: 5px;
+}
+
+.container .videoResult {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #22c55e;
+  color: white;
+  border-radius: 5px;
+}
+
+.container .statusContainer {
+  margin: 20px 0;
+}
+
+.container .statusContainer label {
+  margin-right: 10px;
+}
