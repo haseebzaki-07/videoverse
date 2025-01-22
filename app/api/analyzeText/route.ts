@@ -1,22 +1,25 @@
-// /app/api/generatePrompt/route.js
+// /app/api/generateSpeech/route.js
 import axios from 'axios';
 import { NextResponse } from 'next/server';
 
 export async function POST(req) {
   try {
-    // Extract keywords from the request body
-    const { theme, mood, style, location } = await req.json();
+    // Extract keywords and duration from the request body
+    const { style, topic, duration } = await req.json();
 
-    // Construct a base prompt based on the keywords
+    // Calculate the approximate word count based on speech duration (130-150 words per minute)
+    const wordsPerMinute = 140;  // Average words per minute
+    const wordCount = wordsPerMinute * duration;  // Total word count for the speech
+
+    // Construct a base prompt based on the keywords and duration
     const basePrompt = `
-      Generate a concise, visually captivating prompt for a music video based on the following parameters:
-      - Theme: ${theme}
-      - Mood: ${mood}
-      - Style: ${style}
-      - Location: ${location}
+      Generate a beautiful, eloquent speech that fits a video based on the following parameters:
+      - Style: ${style} 
+      - Topic: ${topic}
+      - Duration: Approximately ${duration} minute(s) of speech
 
-      The prompt should be short and descriptive, ideally 1 to 2 sentences, focusing on visual elements that fit the music video concept.
-      Please ensure the prompt feels creative and suitable for a music video production.`;
+      The speech should be engaging, inspiring, and captivating. It should be appropriate for a video narrative, using clear, poetic language to evoke emotions. The tone should align with the specified style and theme of the video. Please ensure that the speech fits within the estimated word count (around ${wordCount} words), making sure it resonates with viewers while respecting the time limit.
+    `;
 
     // Send the constructed prompt to OpenAI's API
     const response = await axios.post(
@@ -26,7 +29,7 @@ export async function POST(req) {
         messages: [
           {
             role: 'system',
-            content: 'You are an expert music video concept artist.',
+            content: 'You are an expert speechwriter specializing in video narratives and storytelling.',
           },
           {
             role: 'user',
@@ -42,15 +45,15 @@ export async function POST(req) {
       }
     );
 
-    // Extract the generated prompt from the OpenAI response
-    const generatedPrompt = response.data.choices[0].message.content.trim();
+    // Extract the generated speech from the OpenAI response
+    const generatedSpeech = response.data.choices[0].message.content.trim();
 
-    // Return the generated prompt in the response
-    return NextResponse.json({ prompt: generatedPrompt });
+    // Return the generated speech in the response
+    return NextResponse.json({ speech: generatedSpeech });
   } catch (error) {
-    console.error('Error generating prompt:', error.message);
+    console.error('Error generating speech:', error.message);
     return NextResponse.json(
-      { error: 'Error generating prompt', details: error.message },
+      { error: 'Error generating speech', details: error.message },
       { status: 500 }
     );
   }

@@ -1,20 +1,32 @@
 "use client";
 import axios from "axios";
 import { useState } from "react";
-import styles from "./VideoGenerator.module.css"; // Correctly import the CSS module
+import styles from "./VideoGenerator.module.css";
 
 export default function VideoGenerator() {
   const [topic, setTopic] = useState("");
   const [style, setStyle] = useState("");
   const [duration, setDuration] = useState("");
-  const [language, setLanguage] = useState("");
+  const [languages, setLanguages] = useState([
+    "English",
+    "Spanish",
+    "French",
+    "German",
+    "Chinese",
+    "Japanese",
+    "Korean",
+  ]);
+  const [selectedLanguage, setSelectedLanguage] = useState("");
   const [voice, setVoice] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [userPrompt, setUserPrompt] = useState(""); // New state for user prompt
+  const [promptVideoUrl, setPromptVideoUrl] = useState(""); // Video URL from prompt generation
 
   const topics = [
     "Ambient Sound",
+    "Random AI",
     "Nature",
     "Technology",
     "Motivational",
@@ -26,17 +38,17 @@ export default function VideoGenerator() {
     "Travel",
     "Cryptocurrency",
     "Space Exploration",
-    "Movies & TV Shows"
+    "Movies & TV Shows",
   ];
-  
+
   const stylesData = [
     { name: "Comic", image: "/images/comic.avif" },
     { name: "Water Color", image: "/images/water_color.avif" },
     { name: "Photography", image: "/images/photography.avif" },
     { name: "Environment", image: "/images/environment.avif" },
   ];
+
   const durations = ["30", "60", "120"];
-  const languages = ["English", "Spanish", "French", "German"];
   const voices = ["Male", "Female", "Robotic"];
 
   const handleGenerate = async () => {
@@ -44,23 +56,20 @@ export default function VideoGenerator() {
     setError("");
 
     try {
-      const keywords = [style, topic].filter(Boolean);
-
-      console.log({
+      const requestPayload = {
         topic,
         style,
-        keywords,
-        duration,
-      });
+        language: selectedLanguage || "en-US",
+        duration: duration || "60",
+        ssmlGender: voice || "NEUTRAL",
+        voiceName: "en-US-Wavenet-D", // Map based on voice selection
+      };
+
+      console.log("Request Payload:", requestPayload);
 
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/api/generateVideo`,
-        {
-          topic,
-          style,
-          keywords,
-          duration,
-        }
+        `http://localhost:3000/api/generateVideo`,
+        requestPayload
       );
 
       if (response.status === 200) {
@@ -69,36 +78,63 @@ export default function VideoGenerator() {
         throw new Error("Unexpected response status: " + response.status);
       }
     } catch (error) {
-      console.error("Error generating video:", error);
-
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          // Server responded with a status code other than 2xx
-          setError(
-            `Error: ${error.response.data.error || "Server error occurred."}`
-          );
-        } else if (error.request) {
-          // No response received
-          setError(
-            "Error: No response from server. Please check your network connection."
-          );
-        } else {
-          // Axios error triggered during setup
-          setError(`Error: ${error.message}`);
-        }
-      } else {
-        // Non-Axios error
-        setError("An unexpected error occurred. Please try again.");
-      }
+      handleAxiosError(error);
     } finally {
       setLoading(false);
     }
   };
+
+  const handlePromptGenerate = async () => {
+    if (!userPrompt.trim()) {
+      setError("Please enter a valid prompt.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await axios.post(
+        `http://localhost:3000/api/analyzePrompt`,
+        { prompt: userPrompt } // Send the prompt to the backend
+      );
+
+      if (response.status === 200) {
+        setPromptVideoUrl(response.data.videoUrl);
+      } else {
+        throw new Error("Unexpected response status: " + response.status);
+      }
+    } catch (error) {
+      handleAxiosError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAxiosError = (error) => {
+    console.error("Error generating video:", error);
+
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        setError(
+          `Error: ${error.response.data.error || "Server error occurred."}`
+        );
+      } else if (error.request) {
+        setError("Error: No response from server. Please check your network.");
+      } else {
+        setError(`Error: ${error.message}`);
+      }
+    } else {
+      setError("An unexpected error occurred. Please try again.");
+    }
+  };
+
   return (
     <div className={styles.container}>
-      <h2 className={styles.heading}>Topic</h2>
+      <h2 className={styles.heading}>Generate Video with Fields</h2>
+      {/* Existing fields and UI */}
       <label>What is the topic of your video?</label>
-      <select value={topic} onChange={(e) => setTopic(e.target.value)}>
+      <select className="mt-2" value={topic} onChange={(e) => setTopic(e.target.value)}>
         <option value="">Select a topic</option>
         {topics.map((topic) => (
           <option key={topic} value={topic}>
@@ -108,7 +144,6 @@ export default function VideoGenerator() {
       </select>
 
       <h2 className={styles.heading}>Style</h2>
-      <label>Select your video style!</label>
       <div className={styles.stylesContainer}>
         {stylesData.map(({ name, image }) => (
           <div
@@ -125,7 +160,6 @@ export default function VideoGenerator() {
       </div>
 
       <h2 className={styles.heading}>Duration</h2>
-      <label>What is the duration of your video?</label>
       <select value={duration} onChange={(e) => setDuration(e.target.value)}>
         <option value="">Select video duration</option>
         {durations.map((dur) => (
@@ -136,23 +170,24 @@ export default function VideoGenerator() {
       </select>
 
       <h2 className={styles.heading}>Video Language</h2>
-      <label>Select your video language!</label>
-      <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-        <option value="">Select language</option>
-        {languages.map((lang) => (
-          <option key={lang} value={lang}>
-            {lang}
+      <select
+        value={selectedLanguage}
+        onChange={(e) => setSelectedLanguage(e.target.value)}
+      >
+        <option value="">Select a language</option>
+        {languages.map((language, index) => (
+          <option key={index} value={language}>
+            {language}
           </option>
         ))}
       </select>
 
       <h2 className={styles.heading}>Voice Over</h2>
-      <label>Select from all available voices</label>
       <select value={voice} onChange={(e) => setVoice(e.target.value)}>
         <option value="">Select voice</option>
-        {voices.map((voice) => (
-          <option key={voice} value={voice}>
-            {voice}
+        {voices.map((voiceOption) => (
+          <option key={voiceOption} value={voiceOption}>
+            {voiceOption}
           </option>
         ))}
       </select>
@@ -161,28 +196,40 @@ export default function VideoGenerator() {
         Generate Video
       </button>
 
-      {loading && (
-        <div className={styles["loadingCard"]}>
-          <p>Generating video, please wait...</p>
-        </div>
-      )}
-
-      {error && (
-        <div className={styles["errorMessage"]}>
-          <p>{error}</p>
-        </div>
-      )}
+      <div className={styles.promptSection}>
+  <h2 className={styles.heading}>Custom Video Prompt</h2>
+  <label className={styles.label}>Enter your video prompt:</label>
+  <textarea
+    value={userPrompt} // Bind to userPrompt
+    onChange={(e) => setUserPrompt(e.target.value)} // Update userPrompt
+    placeholder="Describe your video idea..."
+    className={styles.textarea}
+  />
+  <button
+    onClick={handlePromptGenerate}
+    className={styles.generatePromptButton}
+  >
+    Generate Video from Prompt
+  </button>
+</div>
+      {loading && <p>Generating video, please wait...</p>}
+      {error && <p className={styles.errorMessage}>{error}</p>}
 
       {videoUrl && (
-        <div className={styles["videoResult"]}>
-          <p>
-            Video generated successfully! Watch it{" "}
-            <a href={videoUrl} target="_blank" rel="noopener noreferrer">
-              here
-            </a>
-            .
-          </p>
-        </div>
+        <p>
+          Video generated successfully! Watch it{" "}
+          <a href={videoUrl} target="_blank" rel="noopener noreferrer">
+            here
+          </a>
+        </p>
+      )}
+      {promptVideoUrl && (
+        <p>
+          Video generated successfully from prompt! Watch it{" "}
+          <a href={promptVideoUrl} target="_blank" rel="noopener noreferrer">
+            here
+          </a>
+        </p>
       )}
     </div>
   );

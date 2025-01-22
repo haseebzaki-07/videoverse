@@ -118,3 +118,61 @@
 .container .statusContainer label {
   margin-right: 10px;
 }
+
+.container .promptSection {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #1e293b; /* Slightly lighter background to distinguish the section */
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.container .promptSection .label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #f3ebeb;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.container .promptSection .loadingCard {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #569ad5;
+  color: rgb(214, 194, 194);
+  border-radius: 5px;
+}
+
+.container .promptSection textarea {
+  width: 100%;
+  height: 100px; /* Set a default height */
+  padding: 10px;
+  border: 1px solid #2563eb;
+  border-radius: 5px;
+  background-color: #2d3748;
+  color: #ffffff;
+  font-size: 14px;
+  resize: vertical; /* Allow resizing vertically */
+}
+
+.container .promptSection textarea:focus {
+  border-color: #4f86e2; /* Blue border on focus */
+  outline: none; /* Removes default focus outline */
+}
+
+.container .promptSection .generatePromptButton {
+  background-color: #2563eb;
+  color: #ffffff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 15px;
+  transition: background-color 0.3s ease;
+}
+
+.container .promptSection .generatePromptButton:hover {
+  background-color: #1e40af;
+}

@@ -1,75 +1,97 @@
-import { createVideo } from '@/utils/createVideo';
-import { generateImages } from '@/utils/generateImages';
-import { NextResponse } from 'next/server';
-import path from 'path';
 import axios from 'axios';
-
-const FREESOUND_API_KEY = process.env.FREESOUND_API; // Replace with your actual Freesound API key
+import path from 'path';
+import { NextResponse } from 'next/server';
 
 export async function POST(req) {
   try {
-    const { topic, style, keywords, duration } = await req.json();
-    console.log(topic, style, keywords, duration);
+    const { topic, style, language, duration, ssmlGender = 'NEUTRAL', voiceName } = await req.json();
+    console.log('Received data:', { topic, style, language, duration, ssmlGender, voiceName });
 
-    // Step 1: Call the generatePrompt API to get a concise prompt for the music video
-    const promptResponse = await axios.post(
-      `${process.env.NEXT_PUBLIC_BASE_URL}/api/analyzeText`,
-      {
+    // Step 1: Call the generateClip API to get video clips for the topic, style, and language
+    let videoResponse;
+    try {
+      videoResponse = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/api/generateClips`, {
         topic,
-       
         style,
-        
-      }
-    );
-
-    const prompt = promptResponse.data.prompt;
-    console.log('Generated Prompt:', prompt);
-
-    if (!prompt) {
-      console.error('Error: No prompt generated');
-      throw new Error('No prompt generated');
+        language,
+      });
+      console.log('generateClip API response:', videoResponse.data);
+    } catch (error) {
+      console.error('Error calling generateClip API:', error.message);
+      console.error('Full error:', error.response?.data || error);
+      return NextResponse.json({ error: 'Failed to generate video clips' }, { status: 500 });
     }
 
-    // Step 2: Fetch audio URL based on keywords and duration using Freesound API
-    const query = keywords.join(' ');
-    const FREESOUND_API_ENDPOINT = `https://freesound.org/apiv2/search/text/?query=${encodeURIComponent(query)}&filter=duration:[0 TO ${duration}]&sort=duration_desc&token=${FREESOUND_API_KEY}`;
-
-    const response = await axios.get(FREESOUND_API_ENDPOINT);
-    const results = response.data.results;
-
-    if (results.length === 0) {
-      return NextResponse.json({ error: 'No matching sounds found' }, { status: 404 });
+    const videoPaths = videoResponse.data.videoPaths;
+    if (!videoPaths || videoPaths.length === 0) {
+      console.error('No video clips generated');
+      return NextResponse.json({ error: 'No video clips generated' }, { status: 400 });
     }
 
-    // Select the longest sound from the results
-    const longestSound = results[0]; // The first result will have the longest duration due to sorting
-    const soundId = longestSound.id;
+    // Step 2: Call the analyzeText API to generate a speech based on the topic, style, and duration
+    let speechResponse;
+    try {
+      speechResponse = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/api/analyzeText`, {
+        style,
+        topic,
+        duration,
+      });
+      console.log('analyzeText API response:', speechResponse.data);
+    } catch (error) {
+      console.error('Error calling analyzeText API:', error.message);
+      console.error('Full error:', error.response?.data || error);
+      return NextResponse.json({ error: 'Failed to generate speech text' }, { status: 500 });
+    }
 
-    // Fetch detailed sound information using the sound ID
-    const soundDetailsResponse = await axios.get(`https://freesound.org/apiv2/sounds/${soundId}/`, {
-      headers: {
-        Authorization: `Token ${FREESOUND_API_KEY}`,
-      },
-    });
-    const soundDetails = soundDetailsResponse.data;
+    const generatedSpeech = speechResponse.data.speech;
+    if (!generatedSpeech) {
+      console.error('Speech generation failed');
+      return NextResponse.json({ error: 'Speech generation failed' }, { status: 500 });
+    }
 
-    // Extract the audio preview URL
-    const audioUrl = soundDetails.previews['preview-hq-mp3']; // or 'preview-lq-mp3'
-    console.log("Audio URL:", audioUrl);
+    // Step 3: Generate speech-to-text (TTS) audio using the generated speech
+    let ttsResponse;
+    try {
+      ttsResponse = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/api/tts`, {
+        text: generatedSpeech,
+        languageCode: language || 'en-US',
+        ssmlGender,  // Include ssmlGender
+        voiceName,   // Include voiceName
+      });
+      console.log('generateSpeech API response:', ttsResponse.data);
+    } catch (error) {
+      console.error('Error calling generateSpeech API:', error.message);
+      console.error('Full error:', error.response?.data || error);
+      return NextResponse.json({ error: 'Failed to generate speech-to-text audio' }, { status: 500 });
+    }
 
-    // Step 3: Generate images based on the generated prompt
-    const imageUrls = await generateImages(prompt);
+    const audioPath = ttsResponse.data.audioPath;
+    if (!audioPath) {
+      console.error('Failed to generate audio');
+      return NextResponse.json({ error: 'Failed to generate audio' }, { status: 500 });
+    }
 
-    // Step 4: Create a video using the generated images and audio
-    const outputVideoPath = path.join(process.cwd(), 'public', 'output_video.mp4');
-    const videoUrl = await createVideo(imageUrls, audioUrl, outputVideoPath);
+    // Step 4: Call the createMusicVideo API to combine video clips and audio
+    let videoUrlResponse;
+    try {
+      videoUrlResponse = await axios.get(`${process.env.NEXT_PUBLIC_BASE_URL}/api/createMusicVideo`, {
+        params: {
+          videoPaths: videoPaths.join(','), // Send the video paths as a comma-separated string
+          audioPath, // Pass the generated audio path
+        },
+      });
+      console.log('createMusicVideo API response:', videoUrlResponse.data);
+    } catch (error) {
+      console.error('Error calling createMusicVideo API:', error.message);
+      console.error('Full error:', error.response?.data || error);
+      return NextResponse.json({ error: 'Failed to create final video' }, { status: 500 });
+    }
 
-    return NextResponse.json({ videoUrl: `/output_video.mp4` });
+    const videoUrl = videoUrlResponse.data.output;
+    return NextResponse.json({ videoUrl: `/output/final_video.mp4` });
   } catch (error) {
-    console.error('Error generating video:', error.message);
-    return NextResponse.json(
-      { error: 'Error generating video', details: error.message },
-      { status: 500 }
-    );
+    console.error('Unexpected error in video and speech generation:', error.message);
+    console.error('Full error:', error.stack || error);
+    return NextResponse.json({ error: 'Unexpected error in video and speech generation', details: error.message }, { status: 500 });
   }
 }
