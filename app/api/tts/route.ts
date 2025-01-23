@@ -3,11 +3,14 @@ import path from 'path';
 import fs from 'fs';
 import { NextResponse } from 'next/server';
 
-// Set the path to your service account key file
-const keyFilePath = path.join(process.cwd(), 'config/google-tts-key.json');
-
-// Create a client instance
-const client = new TextToSpeechClient({ keyFilename: keyFilePath });
+// Create a client instance dynamically using environment variables
+const client = new TextToSpeechClient({
+  credentials: {
+    private_key: process.env.GOOGLE_TTS_PRIVATE_KEY.replace(/\\n/g, '\n'), 
+    client_email: process.env.GOOGLE_TTS_CLIENT_EMAIL,
+  },
+  projectId: process.env.GOOGLE_TTS_PROJECT_ID,
+});
 
 export async function POST(req) {
   try {
