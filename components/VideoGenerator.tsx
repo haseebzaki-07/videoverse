@@ -68,7 +68,7 @@ export default function VideoGenerator() {
       console.log("Request Payload:", requestPayload);
 
       const response = await axios.post(
-        `http://localhost:3000/api/generateVideo`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/generateVideo`,
         requestPayload
       );
 
@@ -95,7 +95,7 @@ export default function VideoGenerator() {
 
     try {
       const response = await axios.post(
-        `http://localhost:3000/api/analyzePrompt`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/analyzePrompt`,
         { prompt: userPrompt } // Send the prompt to the backend
       );
 
@@ -134,7 +134,11 @@ export default function VideoGenerator() {
       <h2 className={styles.heading}>Generate Video with Fields</h2>
       {/* Existing fields and UI */}
       <label>What is the topic of your video?</label>
-      <select className="mt-2" value={topic} onChange={(e) => setTopic(e.target.value)}>
+      <select
+        className="mt-2"
+        value={topic}
+        onChange={(e) => setTopic(e.target.value)}
+      >
         <option value="">Select a topic</option>
         {topics.map((topic) => (
           <option key={topic} value={topic}>
@@ -197,21 +201,21 @@ export default function VideoGenerator() {
       </button>
 
       <div className={styles.promptSection}>
-  <h2 className={styles.heading}>Custom Video Prompt</h2>
-  <label className={styles.label}>Enter your video prompt:</label>
-  <textarea
-    value={userPrompt} // Bind to userPrompt
-    onChange={(e) => setUserPrompt(e.target.value)} // Update userPrompt
-    placeholder="Describe your video idea..."
-    className={styles.textarea}
-  />
-  <button
-    onClick={handlePromptGenerate}
-    className={styles.generatePromptButton}
-  >
-    Generate Video from Prompt
-  </button>
-</div>
+        <h2 className={styles.heading}>Custom Video Prompt</h2>
+        <label className={styles.label}>Enter your video prompt:</label>
+        <textarea
+          value={userPrompt} // Bind to userPrompt
+          onChange={(e) => setUserPrompt(e.target.value)} // Update userPrompt
+          placeholder="Describe your video idea..."
+          className={styles.textarea}
+        />
+        <button
+          onClick={handlePromptGenerate}
+          className={styles.generatePromptButton}
+        >
+          Generate Video from Prompt
+        </button>
+      </div>
       {loading && <p>Generating video, please wait...</p>}
       {error && <p className={styles.errorMessage}>{error}</p>}
 
