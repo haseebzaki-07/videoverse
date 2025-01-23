@@ -1,7 +1,6 @@
-import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
-import { NextResponse } from 'next/server';
+import axios from "axios";
+import fs from "fs";
+import path from "path";
 
 // Pexels API Key (from .env.local)
 const pexelsApiKey = process.env.PEXELS_API_KEY;
@@ -12,15 +11,17 @@ export async function POST(req) {
 
     // Basic validation
     if (!topic) {
-      return new Response(JSON.stringify({ message: 'Topic is required' }), { status: 400 });
+      return new Response(JSON.stringify({ message: "Topic is required" }), {
+        status: 400,
+      });
     }
 
     // Make a request to the Pexels API to search for videos
-    const response = await axios.get('https://api.pexels.com/videos/search', {
+    const response = await axios.get("https://api.pexels.com/videos/search", {
       params: {
         query: `${topic} ${style}`, // Combine topic and style for search query
-        per_page: 5,  // Limit to 5 video clips
-        lang: language || 'en',  // Set language, default to 'en' if not provided
+        per_page: 5, // Limit to 5 video clips
+        lang: language || "en", // Set language, default to 'en' if not provided
       },
       headers: {
         Authorization: pexelsApiKey, // Pass the API key in headers
@@ -28,10 +29,12 @@ export async function POST(req) {
     });
 
     // Get video URLs
-    const videoUrls = response.data.videos.map((video) => video.video_files[0]?.link).filter(Boolean);
+    const videoUrls = response.data.videos
+      .map((video) => video.video_files[0]?.link)
+      .filter(Boolean);
 
     // Prepare the directory to store videos
-    const publicDir = path.join(process.cwd(), 'public', 'videos');
+    const publicDir = path.join(process.cwd(), "public", "videos");
     if (!fs.existsSync(publicDir)) {
       fs.mkdirSync(publicDir, { recursive: true });
     }
@@ -42,13 +45,15 @@ export async function POST(req) {
 
       try {
         // Download the video and save it to the public directory
-        const videoStream = await axios.get(videoUrl, { responseType: 'stream' });
+        const videoStream = await axios.get(videoUrl, {
+          responseType: "stream",
+        });
 
         await new Promise((resolve, reject) => {
           const writeStream = fs.createWriteStream(videoPath);
           videoStream.data.pipe(writeStream);
-          videoStream.data.on('end', resolve);
-          videoStream.data.on('error', reject);
+          videoStream.data.on("end", resolve);
+          videoStream.data.on("error", reject);
         });
 
         // Check the file size to ensure the video is not corrupted
@@ -60,18 +65,23 @@ export async function POST(req) {
           fs.unlinkSync(videoPath); // Remove corrupted file
         }
       } catch (downloadError) {
-        console.error(`Error downloading video from ${videoUrl}:`, downloadError.message);
+        console.error(
+          `Error downloading video from ${videoUrl}:`,
+          downloadError.message
+        );
         // Continue to the next video if one fails
       }
     }
 
     // Return the paths of the successfully downloaded video clips
     return new Response(JSON.stringify({ videoPaths }), { status: 200 });
-
   } catch (error) {
-    console.error('Error fetching videos from Pexels:', error);
+    console.error("Error fetching videos from Pexels:", error);
     return new Response(
-      JSON.stringify({ message: 'Internal Server Error', error: error.message }),
+      JSON.stringify({
+        message: "Internal Server Error",
+        error: error.message,
+      }),
       { status: 500 }
     );
   }

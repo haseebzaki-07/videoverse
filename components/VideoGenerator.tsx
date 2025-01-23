@@ -2,20 +2,12 @@
 import axios from "axios";
 import { useState } from "react";
 import styles from "./VideoGenerator.module.css";
+import Image from "next/image";
 
 export default function VideoGenerator() {
   const [topic, setTopic] = useState("");
   const [style, setStyle] = useState("");
   const [duration, setDuration] = useState("");
-  const [languages, setLanguages] = useState([
-    "English",
-    "Spanish",
-    "French",
-    "German",
-    "Chinese",
-    "Japanese",
-    "Korean",
-  ]);
   const [selectedLanguage, setSelectedLanguage] = useState("");
   const [voice, setVoice] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -157,7 +149,7 @@ export default function VideoGenerator() {
             }`}
             onClick={() => setStyle(name)}
           >
-            <img src={image} alt={name} />
+            <Image src={image} alt={name} width={500} height={500} />
             <p>{name}</p>
           </div>
         ))}
@@ -179,11 +171,11 @@ export default function VideoGenerator() {
         onChange={(e) => setSelectedLanguage(e.target.value)}
       >
         <option value="">Select a language</option>
-        {languages.map((language, index) => (
+        {/* languages.map((language, index) => (
           <option key={index} value={language}>
             {language}
           </option>
-        ))}
+        )) */}
       </select>
 
       <h2 className={styles.heading}>Voice Over</h2>

@@ -1,5 +1,4 @@
 import axios from "axios";
-import path from "path";
 import { NextResponse } from "next/server";
 
 export async function POST(req) {
@@ -134,7 +133,6 @@ export async function POST(req) {
       );
     }
 
-    const videoUrl = videoUrlResponse.data.output;
     return NextResponse.json({ videoUrl: `/output/final_video.mp4` });
   } catch (error) {
     console.error(
