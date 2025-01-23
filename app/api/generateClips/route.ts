@@ -2,13 +2,26 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { NextRequest } from "next/server";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 // Pexels API Key (from .env.local)
-const pexelsApiKey = process.env.PEXELS_API_KEY!; // Use non-null assertion
+const pexelsApiKey = process.env.PEXELS_API_KEY!;
 
-// Define a type for the video object
+// Define interfaces for Pexels API response
+interface VideoFile {
+  link: string;
+  quality: string;
+}
+
 interface Video {
-  video_files: { link: string }[];
+  video_files: VideoFile[];
+}
+
+interface PexelsResponse {
+  videos: Video[];
 }
 
 export async function POST(req: NextRequest) {
@@ -22,60 +35,131 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Ensure the videos directory exists
+    const videosDir = path.join(process.cwd(), "public", "videos");
+    if (!fs.existsSync(videosDir)) {
+      fs.mkdirSync(videosDir, { recursive: true });
+    }
+
+    // Clean up existing videos
+    const existingFiles = fs.readdirSync(videosDir);
+    for (const file of existingFiles) {
+      fs.unlinkSync(path.join(videosDir, file));
+    }
+
     // Make a request to the Pexels API to search for videos
-    const response = await axios.get<{ videos: Video[] }>(
+    const response = await axios.get<PexelsResponse>(
       "https://api.pexels.com/videos/search",
       {
         params: {
-          query: `${topic} ${style}`, // Combine topic and style for search query
-          per_page: 5, // Limit to 5 video clips
-          lang: language || "en", // Set language, default to 'en' if not provided
+          query: `${topic} ${style}`.trim(),
+          per_page: 5,
+          lang: language || "en",
         },
         headers: {
-          Authorization: `Bearer ${pexelsApiKey}`,
+          Authorization: pexelsApiKey, // Remove 'Bearer' prefix if it's already included in the key
         },
       }
     );
 
-    const videoPaths: string[] = [];
-    for (const video of response.data.videos) {
-      const videoUrl = video.video_files[0].link;
-      const videoPath = path.join(
-        process.cwd(),
-        "public/videos",
-        path.basename(videoUrl)
+    console.log("Pexels API Response:", response.data);
+
+    if (!response.data.videos || response.data.videos.length === 0) {
+      return new Response(
+        JSON.stringify({ message: "No videos found for the given query" }),
+        { status: 404 }
       );
+    }
+
+    const videoPaths: string[] = [];
+    let videoIndex = 1;
+
+    for (const video of response.data.videos) {
+      if (!video.video_files || video.video_files.length === 0) continue;
+
+      // Get the first video file (usually the best quality)
+      const videoFile = video.video_files[0];
+      const tempFileName = `temp_${videoIndex}.mp4`;
+      const videoFileName = `video_${videoIndex}.mp4`;
+      const tempPath = path.join(videosDir, tempFileName);
+      const finalPath = path.join(videosDir, videoFileName);
+
       try {
-        const videoResponse = await axios.get(videoUrl, {
+        console.log(`Downloading video ${videoIndex} from ${videoFile.link}`);
+
+        const videoResponse = await axios({
+          method: "get",
+          url: videoFile.link,
           responseType: "stream",
         });
-        const writer = fs.createWriteStream(videoPath);
+
+        // Create write stream and pipe the video data
+        const writer = fs.createWriteStream(tempPath);
         videoResponse.data.pipe(writer);
+
         await new Promise<void>((resolve, reject) => {
-          writer.on("finish", () => resolve());
-          writer.on("error", reject);
+          writer.on("finish", () => {
+            console.log(`Successfully downloaded video ${videoIndex}`);
+            resolve();
+          });
+          writer.on("error", (error) => {
+            console.error(`Error writing video ${videoIndex}:`, error);
+            reject(error);
+          });
         });
-        videoPaths.push(videoPath);
-      } catch (downloadError) {
-        if (downloadError instanceof Error) {
+
+        // Remove audio from the video using FFmpeg
+        console.log(`Removing audio from video ${videoIndex}`);
+        const ffmpegCommand = `ffmpeg -i "${tempPath}" -c:v copy -an "${finalPath}"`;
+
+        try {
+          await execAsync(ffmpegCommand);
+          console.log(`Successfully removed audio from video ${videoIndex}`);
+
+          // Delete the temporary file
+          fs.unlinkSync(tempPath);
+
+          videoPaths.push(`/videos/${videoFileName}`);
+          videoIndex++;
+        } catch (ffmpegError) {
           console.error(
-            `Error downloading video from ${videoUrl}:`,
-            downloadError.message
+            `Error removing audio from video ${videoIndex}:`,
+            ffmpegError instanceof Error ? ffmpegError.message : ffmpegError
           );
-        } else {
-          console.error(
-            `Unknown error downloading video from ${videoUrl}:`,
-            downloadError
-          );
+          // If FFmpeg fails, delete both temp and final files
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
+          continue;
         }
-        // Continue to the next video if one fails
+      } catch (downloadError) {
+        console.error(
+          `Error downloading video ${videoIndex}:`,
+          downloadError instanceof Error ? downloadError.message : downloadError
+        );
+        // Clean up any partial files
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
+        continue;
       }
     }
 
+    if (videoPaths.length === 0) {
+      return new Response(
+        JSON.stringify({ message: "Failed to download any videos" }),
+        { status: 500 }
+      );
+    }
+
     // Return the paths of the successfully downloaded video clips
-    return new Response(JSON.stringify({ videoPaths }), { status: 200 });
+    return new Response(
+      JSON.stringify({
+        message: "Videos downloaded successfully",
+        videoPaths,
+      }),
+      { status: 200 }
+    );
   } catch (error) {
-    console.error("Error fetching videos from Pexels:", error);
+    console.error("Error in generateClips:", error);
     return new Response(
       JSON.stringify({
         message: "Internal Server Error",
