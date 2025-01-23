@@ -1,11 +1,17 @@
 import axios from "axios";
 import fs from "fs";
 import path from "path";
+import { NextRequest } from "next/server";
 
 // Pexels API Key (from .env.local)
-const pexelsApiKey = process.env.PEXELS_API_KEY;
+const pexelsApiKey = process.env.PEXELS_API_KEY!; // Use non-null assertion
 
-export async function POST(req) {
+// Define a type for the video object
+interface Video {
+  video_files: { link: string }[];
+}
+
+export async function POST(req: NextRequest) {
   try {
     const { topic, style, language } = await req.json();
 
@@ -17,58 +23,51 @@ export async function POST(req) {
     }
 
     // Make a request to the Pexels API to search for videos
-    const response = await axios.get("https://api.pexels.com/videos/search", {
-      params: {
-        query: `${topic} ${style}`, // Combine topic and style for search query
-        per_page: 5, // Limit to 5 video clips
-        lang: language || "en", // Set language, default to 'en' if not provided
-      },
-      headers: {
-        Authorization: pexelsApiKey, // Pass the API key in headers
-      },
-    });
+    const response = await axios.get<{ videos: Video[] }>(
+      "https://api.pexels.com/videos/search",
+      {
+        params: {
+          query: `${topic} ${style}`, // Combine topic and style for search query
+          per_page: 5, // Limit to 5 video clips
+          lang: language || "en", // Set language, default to 'en' if not provided
+        },
+        headers: {
+          Authorization: `Bearer ${pexelsApiKey}`,
+        },
+      }
+    );
 
-    // Get video URLs
-    const videoUrls = response.data.videos
-      .map((video) => video.video_files[0]?.link)
-      .filter(Boolean);
-
-    // Prepare the directory to store videos
-    const publicDir = path.join(process.cwd(), "public", "videos");
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir, { recursive: true });
-    }
-
-    const videoPaths = [];
-    for (const [index, videoUrl] of videoUrls.entries()) {
-      const videoPath = path.join(publicDir, `video_${index + 1}.mp4`);
-
+    const videoPaths: string[] = [];
+    for (const video of response.data.videos) {
+      const videoUrl = video.video_files[0].link;
+      const videoPath = path.join(
+        process.cwd(),
+        "public/videos",
+        path.basename(videoUrl)
+      );
       try {
-        // Download the video and save it to the public directory
-        const videoStream = await axios.get(videoUrl, {
+        const videoResponse = await axios.get(videoUrl, {
           responseType: "stream",
         });
-
-        await new Promise((resolve, reject) => {
-          const writeStream = fs.createWriteStream(videoPath);
-          videoStream.data.pipe(writeStream);
-          videoStream.data.on("end", resolve);
-          videoStream.data.on("error", reject);
+        const writer = fs.createWriteStream(videoPath);
+        videoResponse.data.pipe(writer);
+        await new Promise<void>((resolve, reject) => {
+          writer.on("finish", () => resolve());
+          writer.on("error", reject);
         });
-
-        // Check the file size to ensure the video is not corrupted
-        const stats = fs.statSync(videoPath);
-        if (stats.size > 0) {
-          videoPaths.push(`/videos/video_${index + 1}.mp4`);
-        } else {
-          console.warn(`Video ${videoPath} is empty and will be ignored.`);
-          fs.unlinkSync(videoPath); // Remove corrupted file
-        }
+        videoPaths.push(videoPath);
       } catch (downloadError) {
-        console.error(
-          `Error downloading video from ${videoUrl}:`,
-          downloadError.message
-        );
+        if (downloadError instanceof Error) {
+          console.error(
+            `Error downloading video from ${videoUrl}:`,
+            downloadError.message
+          );
+        } else {
+          console.error(
+            `Unknown error downloading video from ${videoUrl}:`,
+            downloadError
+          );
+        }
         // Continue to the next video if one fails
       }
     }
@@ -80,7 +79,7 @@ export async function POST(req) {
     return new Response(
       JSON.stringify({
         message: "Internal Server Error",
-        error: error.message,
+        error: error instanceof Error ? error.message : "Unknown error",
       }),
       { status: 500 }
     );

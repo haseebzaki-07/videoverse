@@ -5,18 +5,18 @@ import styles from "./VideoGenerator.module.css";
 import Image from "next/image";
 
 export default function VideoGenerator() {
-  const [topic, setTopic] = useState("");
-  const [style, setStyle] = useState("");
-  const [duration, setDuration] = useState("");
-  const [selectedLanguage, setSelectedLanguage] = useState("");
-  const [voice, setVoice] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [userPrompt, setUserPrompt] = useState(""); // New state for user prompt
-  const [promptVideoUrl, setPromptVideoUrl] = useState(""); // Video URL from prompt generation
+  const [topic, setTopic] = useState<string>("");
+  const [style, setStyle] = useState<string>("");
+  const [duration, setDuration] = useState<string>("");
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("");
+  const [voice, setVoice] = useState<string>("");
+  const [videoUrl, setVideoUrl] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
+  const [userPrompt, setUserPrompt] = useState<string>(""); // New state for user prompt
+  const [promptVideoUrl, setPromptVideoUrl] = useState<string>(""); // Video URL from prompt generation
 
-  const topics = [
+  const topics: string[] = [
     "Ambient Sound",
     "Random AI",
     "Nature",
@@ -40,10 +40,10 @@ export default function VideoGenerator() {
     { name: "Environment", image: "/images/environment.avif" },
   ];
 
-  const durations = ["30", "60", "120"];
-  const voices = ["Male", "Female", "Robotic"];
+  const durations: string[] = ["30", "60", "120"];
+  const voices: string[] = ["Male", "Female", "Robotic"];
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (): Promise<void> => {
     setLoading(true);
     setError("");
 
@@ -76,7 +76,7 @@ export default function VideoGenerator() {
     }
   };
 
-  const handlePromptGenerate = async () => {
+  const handlePromptGenerate = async (): Promise<void> => {
     if (!userPrompt.trim()) {
       setError("Please enter a valid prompt.");
       return;
@@ -103,7 +103,7 @@ export default function VideoGenerator() {
     }
   };
 
-  const handleAxiosError = (error) => {
+  const handleAxiosError = (error: unknown): void => {
     console.error("Error generating video:", error);
 
     if (axios.isAxiosError(error)) {
@@ -116,6 +116,8 @@ export default function VideoGenerator() {
       } else {
         setError(`Error: ${error.message}`);
       }
+    } else if (error instanceof Error) {
+      setError(`Error: ${error.message}`);
     } else {
       setError("An unexpected error occurred. Please try again.");
     }
@@ -157,10 +159,10 @@ export default function VideoGenerator() {
 
       <h2 className={styles.heading}>Duration</h2>
       <select value={duration} onChange={(e) => setDuration(e.target.value)}>
-        <option value="">Select video duration</option>
-        {durations.map((dur) => (
-          <option key={dur} value={dur}>
-            {dur}
+        <option value="">Select duration</option>
+        {durations.map((duration) => (
+          <option key={duration} value={duration}>
+            {duration} seconds
           </option>
         ))}
       </select>

@@ -1,7 +1,7 @@
-import axios from "axios";
-import { NextResponse } from "next/server";
+import axios, { AxiosResponse } from "axios";
+import { NextResponse, NextRequest } from "next/server";
 
-export async function POST(req) {
+export async function POST(req: NextRequest) {
   try {
     const {
       topic,
@@ -21,7 +21,7 @@ export async function POST(req) {
     });
 
     // Step 1: Call the generateClip API to get video clips for the topic, style, and language
-    let videoResponse;
+    let videoResponse: AxiosResponse<{ videoPaths: string[] }>;
     try {
       videoResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/generateClips`,
@@ -33,8 +33,14 @@ export async function POST(req) {
       );
       console.log("generateClip API response:", videoResponse.data);
     } catch (error) {
-      console.error("Error calling generateClip API:", error.message);
-      console.error("Full error:", error.response?.data || error);
+      if (axios.isAxiosError(error)) {
+        console.error("Error calling generateClip API:", error.message);
+        console.error("Full error:", error.response?.data || error);
+      } else if (error instanceof Error) {
+        console.error("Error calling generateClip API:", error.message);
+      } else {
+        console.error("Unknown error calling generateClip API:", error);
+      }
       return NextResponse.json(
         { error: "Failed to generate video clips" },
         { status: 500 }
@@ -51,7 +57,7 @@ export async function POST(req) {
     }
 
     // Step 2: Call the analyzeText API to generate a speech based on the topic, style, and duration
-    let speechResponse;
+    let speechResponse: AxiosResponse<{ speech: string }>;
     try {
       speechResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/analyzeText`,
@@ -63,8 +69,14 @@ export async function POST(req) {
       );
       console.log("analyzeText API response:", speechResponse.data);
     } catch (error) {
-      console.error("Error calling analyzeText API:", error.message);
-      console.error("Full error:", error.response?.data || error);
+      if (axios.isAxiosError(error)) {
+        console.error("Error calling analyzeText API:", error.message);
+        console.error("Full error:", error.response?.data || error);
+      } else if (error instanceof Error) {
+        console.error("Error calling analyzeText API:", error.message);
+      } else {
+        console.error("Unknown error calling analyzeText API:", error);
+      }
       return NextResponse.json(
         { error: "Failed to generate speech text" },
         { status: 500 }
@@ -81,21 +93,27 @@ export async function POST(req) {
     }
 
     // Step 3: Generate speech-to-text (TTS) audio using the generated speech
-    let ttsResponse;
+    let ttsResponse: AxiosResponse<{ audioPath: string }>;
     try {
       ttsResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/tts`,
         {
           text: generatedSpeech,
           languageCode: language || "en-US",
-          ssmlGender, // Include ssmlGender
-          voiceName, // Include voiceName
+          ssmlGender,
+          voiceName,
         }
       );
       console.log("generateSpeech API response:", ttsResponse.data);
     } catch (error) {
-      console.error("Error calling generateSpeech API:", error.message);
-      console.error("Full error:", error.response?.data || error);
+      if (axios.isAxiosError(error)) {
+        console.error("Error calling generateSpeech API:", error.message);
+        console.error("Full error:", error.response?.data || error);
+      } else if (error instanceof Error) {
+        console.error("Error calling generateSpeech API:", error.message);
+      } else {
+        console.error("Unknown error calling generateSpeech API:", error);
+      }
       return NextResponse.json(
         { error: "Failed to generate speech-to-text audio" },
         { status: 500 }
@@ -112,7 +130,7 @@ export async function POST(req) {
     }
 
     // Step 4: Call the createMusicVideo API to combine video clips and audio
-    let videoUrlResponse;
+    let videoUrlResponse: AxiosResponse<{ output: string }>;
     try {
       videoUrlResponse = await axios.get(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/createMusicVideo`,
@@ -125,25 +143,34 @@ export async function POST(req) {
       );
       console.log("createMusicVideo API response:", videoUrlResponse.data);
     } catch (error) {
-      console.error("Error calling createMusicVideo API:", error.message);
-      console.error("Full error:", error.response?.data || error);
+      if (axios.isAxiosError(error)) {
+        console.error("Error calling createMusicVideo API:", error.message);
+        console.error("Full error:", error.response?.data || error);
+      } else if (error instanceof Error) {
+        console.error("Error calling createMusicVideo API:", error.message);
+      } else {
+        console.error("Unknown error calling createMusicVideo API:", error);
+      }
       return NextResponse.json(
         { error: "Failed to create final video" },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ videoUrl: `/output/final_video.mp4` });
+    return NextResponse.json({ videoUrl: videoUrlResponse.data.output });
   } catch (error) {
-    console.error(
-      "Unexpected error in video and speech generation:",
-      error.message
-    );
-    console.error("Full error:", error.stack || error);
+    if (error instanceof Error) {
+      console.error(
+        "Unexpected error in video and speech generation:",
+        error.message
+      );
+    } else {
+      console.error("Unknown error in video and speech generation:", error);
+    }
     return NextResponse.json(
       {
         error: "Unexpected error in video and speech generation",
-        details: error.message,
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

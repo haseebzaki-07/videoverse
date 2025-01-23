@@ -1,5 +1,5 @@
-import { exec } from 'child_process';
-import { NextResponse } from 'next/server'; // if you're working with Next.js
+import { exec } from "child_process";
+import { NextResponse } from "next/server"; // if you're working with Next.js
 
 export async function createVideo() {
   try {
@@ -13,12 +13,14 @@ export async function createVideo() {
 
     console.log(`Running FFmpeg command: ${ffmpegCommand}`);
 
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       exec(ffmpegCommand, (error, stdout, stderr) => {
         if (error) {
           console.error(`Execution error: ${error.message}`);
           console.error(`FFmpeg stderr: ${stderr}`);
-          return reject(new Error('Error during FFmpeg video creation process.'));
+          return reject(
+            new Error("Error during FFmpeg video creation process.")
+          );
         }
 
         if (stderr) {
@@ -32,14 +34,25 @@ export async function createVideo() {
 
     // Return success message after video creation
     return NextResponse.json(
-      { message: 'Video created successfully!', output: '/output/final_video.mp4' },
+      {
+        message: "Video created successfully!",
+        output: "/output/final_video.mp4",
+      },
       { status: 200 }
     );
-
   } catch (error) {
     // Improved error logging
-    console.error('Error occurred during video creation:', error.message);
-    console.error(error.stack);
-    return NextResponse.json({ error: `Unexpected error occurred during video creation: ${error.message}` }, { status: 500 });
+    console.error(
+      "Error occurred during video creation:",
+      error instanceof Error ? error.message : "Unknown error"
+    );
+    return NextResponse.json(
+      {
+        error: `Unexpected error occurred during video creation: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      },
+      { status: 500 }
+    );
   }
 }

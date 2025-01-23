@@ -1,8 +1,8 @@
 import axios from "axios";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 
 // Helper function to extract parameters from the prompt
-async function extractParameters(prompt) {
+async function extractParameters(prompt: string) {
   try {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -35,7 +35,11 @@ async function extractParameters(prompt) {
     // Parse and return the JSON response
     return JSON.parse(response.data.choices[0].message.content);
   } catch (error) {
-    console.error("Error extracting parameters with GPT:", error.message);
+    if (error instanceof Error) {
+      console.error("Error extracting parameters with GPT:", error.message);
+    } else {
+      console.error("Unknown error extracting parameters with GPT:", error);
+    }
     // Return default values if GPT API fails
     return {
       topic: "Default Topic",
@@ -48,7 +52,7 @@ async function extractParameters(prompt) {
   }
 }
 // The main API handler
-export async function POST(req) {
+export async function POST(req: NextRequest) {
   try {
     // Parse the request body
     const { prompt } = await req.json();
@@ -82,8 +86,14 @@ export async function POST(req) {
       );
       console.log("Video generation API response:", videoResponse.data);
     } catch (error) {
-      console.error("Error calling video generation API:", error.message);
-      console.error("Full error:", error.response?.data || error);
+      if (axios.isAxiosError(error)) {
+        console.error("Error calling video generation API:", error.message);
+        console.error("Full error:", error.response?.data || error);
+      } else if (error instanceof Error) {
+        console.error("Error calling video generation API:", error.message);
+      } else {
+        console.error("Unknown error calling video generation API:", error);
+      }
       return NextResponse.json(
         { error: "Failed to generate video" },
         { status: 500 }
@@ -101,11 +111,15 @@ export async function POST(req) {
 
     return NextResponse.json({ videoUrl });
   } catch (error) {
-    console.error("Unexpected error in processing prompt:", error.message);
+    if (error instanceof Error) {
+      console.error("Unexpected error in processing prompt:", error.message);
+    } else {
+      console.error("Unknown error in processing prompt:", error);
+    }
     return NextResponse.json(
       {
         error: "Unexpected error in processing prompt",
-        details: error.message,
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

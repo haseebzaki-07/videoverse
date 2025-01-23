@@ -1,18 +1,18 @@
-import { TextToSpeechClient } from "@google-cloud/text-to-speech";
+import { TextToSpeechClient, protos } from "@google-cloud/text-to-speech";
 import path from "path";
 import fs from "fs";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 
 // Create a client instance dynamically using environment variables
 const client = new TextToSpeechClient({
   credentials: {
-    private_key: process.env.GOOGLE_TTS_PRIVATE_KEY.replace(/\\n/g, "\n"),
-    client_email: process.env.GOOGLE_TTS_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_TTS_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+    client_email: process.env.GOOGLE_TTS_CLIENT_EMAIL!,
   },
-  projectId: process.env.GOOGLE_TTS_PROJECT_ID,
+  projectId: process.env.GOOGLE_TTS_PROJECT_ID!,
 });
 
-export async function POST(req) {
+export async function POST(req: NextRequest) {
   try {
     const {
       text,
@@ -29,11 +29,12 @@ export async function POST(req) {
     }
 
     // Construct the request with optional voiceName
-    const request = {
-      input: { text },
-      voice: { languageCode, ssmlGender, name: voiceName },
-      audioConfig: { audioEncoding: "MP3" },
-    };
+    const request: protos.google.cloud.texttospeech.v1.ISynthesizeSpeechRequest =
+      {
+        input: { text },
+        voice: { languageCode, ssmlGender, name: voiceName },
+        audioConfig: { audioEncoding: "MP3" },
+      };
 
     // Perform the Text-to-Speech request
     const [response] = await client.synthesizeSpeech(request);
@@ -46,7 +47,7 @@ export async function POST(req) {
     );
 
     // Write the audio content to the public directory
-    fs.writeFileSync(outputPath, response.audioContent);
+    fs.writeFileSync(outputPath, response.audioContent as Buffer);
 
     // Return the path to the generated audio file
     return NextResponse.json({
