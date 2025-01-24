@@ -65,7 +65,9 @@ export default function VideoGenerator() {
       );
 
       if (response.status === 200) {
-        setVideoUrl(response.data.videoUrl);
+        setVideoUrl(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/output/final_video.mp4`
+        );
       } else {
         throw new Error("Unexpected response status: " + response.status);
       }
