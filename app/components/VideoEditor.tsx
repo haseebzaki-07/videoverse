@@ -12,6 +12,7 @@ interface TextOverlay {
   duration: number;
 }
 
+
 interface VisualEffect {
   id: string;
   type: "fade" | "blur" | "brightness";
