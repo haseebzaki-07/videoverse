@@ -17,18 +17,77 @@
   margin: 0 auto;
 }
 
+.videoElement,
 .previewCanvas {
   width: 100%;
   max-width: 480px;
   aspect-ratio: 16/9;
   background: #000;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .controls {
   display: flex;
-  gap: 10px;
-  justify-content: center;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  background-color: #1e293b;
+  border-radius: 8px;
+}
+
+.effectControls {
+  display: flex;
   flex-wrap: wrap;
+  gap: 20px;
+}
+
+.effectControls > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.effectControls label {
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.effectControls input[type="range"] {
+  width: 200px;
+  accent-color: #3b82f6;
+}
+
+.textOverlays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.textOverlay {
+  position: relative;
+}
+
+.textOverlay input {
+  padding: 8px;
+  background-color: #2d3748;
+  border: 1px solid #4a5568;
+  border-radius: 4px;
+  color: #ffffff;
+}
+
+.actionButton {
+  padding: 8px 16px;
+  background-color: #3b82f6;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.actionButton:hover {
+  background-color: #2563eb;
 }
 
 .timeline {

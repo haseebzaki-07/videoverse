@@ -8,24 +8,23 @@ interface TextOverlay {
   text: string;
   x: number;
   y: number;
-  fontSize: number;
-  color: string;
-  timestamp: number;
-  duration: number;
+  isDragging: boolean;
+  isEditing: boolean;
 }
 
-interface VisualEffect {
-  id: string;
-  type: "fade" | "blur" | "brightness";
-  intensity: number;
-  timestamp: number;
-  duration: number;
+interface Effects {
+  fade: number;
+  brightness: number;
+  blur: number;
 }
 
 export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
-  const [visualEffects, setVisualEffects] = useState<VisualEffect[]>([]);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [effects, setEffects] = useState<Effects>({
+    fade: 1,
+    brightness: 1,
+    blur: 0,
+  });
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -33,44 +32,18 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      updatePreview();
-    }, 1000 / 30); // Update at 30 FPS
+    const interval = setInterval(updateCanvas, 1000 / 30); // 30 FPS
     return () => clearInterval(interval);
-  }, [currentTime, textOverlays, visualEffects]);
+  }, [textOverlays, effects]);
 
-  const addTextOverlay = () => {
-    const newOverlay: TextOverlay = {
-      id: Date.now().toString(),
-      text: "New Text",
-      x: 50,
-      y: 50,
-      fontSize: 24,
-      color: "#ffffff",
-      timestamp: currentTime,
-      duration: 3,
-    };
-    setTextOverlays([...textOverlays, newOverlay]);
-  };
-
-  const addVisualEffect = (type: "fade" | "blur" | "brightness") => {
-    const newEffect: VisualEffect = {
-      id: Date.now().toString(),
-      type,
-      intensity: 50,
-      timestamp: currentTime,
-      duration: 3,
-    };
-    setVisualEffects([...visualEffects, newEffect]);
-  };
-
-  const updatePreview = () => {
+  const updateCanvas = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
 
-    // Clear the canvas before drawing
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    // Apply effects
+    ctx.filter = `brightness(${effects.brightness}) blur(${effects.blur}px)`;
+    ctx.globalAlpha = effects.fade;
 
     // Draw video frame
     ctx.drawImage(
@@ -81,59 +54,70 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
       canvasRef.current.height
     );
 
-    // Apply visual effects
-    visualEffects.forEach((effect) => {
-      if (
-        currentTime >= effect.timestamp &&
-        currentTime <= effect.timestamp + effect.duration
-      ) {
-        applyVisualEffect(ctx, effect);
-      }
-    });
-
     // Draw text overlays
+    ctx.filter = "none";
+    ctx.globalAlpha = 1;
     textOverlays.forEach((overlay) => {
-      if (
-        currentTime >= overlay.timestamp &&
-        currentTime <= overlay.timestamp + overlay.duration
-      ) {
-        drawTextOverlay(ctx, overlay);
-      }
+      ctx.font = "24px Arial";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(overlay.text, overlay.x, overlay.y);
     });
   };
 
-  const applyVisualEffect = (
-    ctx: CanvasRenderingContext2D,
-    effect: VisualEffect
-  ) => {
-    switch (effect.type) {
-      case "fade":
-        ctx.globalAlpha = effect.intensity / 100;
-        break;
-      case "blur":
-        ctx.filter = `blur(${effect.intensity}px)`;
-        break;
-      case "brightness":
-        ctx.filter = `brightness(${1 + effect.intensity / 100})`;
-        break;
-      default:
-        ctx.filter = "none";
-    }
+  const addTextOverlay = () => {
+    const newOverlay: TextOverlay = {
+      id: Date.now().toString(),
+      text: "New Text",
+      x: 50,
+      y: 50,
+      isDragging: false,
+      isEditing: false,
+    };
+    setTextOverlays([...textOverlays, newOverlay]);
   };
 
-  const drawTextOverlay = (
-    ctx: CanvasRenderingContext2D,
-    overlay: TextOverlay
-  ) => {
-    ctx.font = `${overlay.fontSize}px Arial`;
-    ctx.fillStyle = overlay.color;
-    ctx.fillText(overlay.text, overlay.x, overlay.y);
+  const handleMouseDown = (e: React.MouseEvent, overlayId: string) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setTextOverlays((overlays) =>
+      overlays.map((overlay) =>
+        overlay.id === overlayId ? { ...overlay, isDragging: true } : overlay
+      )
+    );
   };
 
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-    }
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setTextOverlays((overlays) =>
+      overlays.map((overlay) =>
+        overlay.isDragging ? { ...overlay, x, y } : overlay
+      )
+    );
+  };
+
+  const handleMouseUp = () => {
+    setTextOverlays((overlays) =>
+      overlays.map((overlay) => ({ ...overlay, isDragging: false }))
+    );
+  };
+
+  const handleTextEdit = (overlayId: string, newText: string) => {
+    setTextOverlays((overlays) =>
+      overlays.map((overlay) =>
+        overlay.id === overlayId ? { ...overlay, text: newText } : overlay
+      )
+    );
   };
 
   const exportVideo = async () => {
@@ -165,9 +149,10 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
           (overlay) =>
             `drawtext=text='${overlay.text}':x=${overlay.x}:y=${
               overlay.y
-            }:fontcolor=${overlay.color.replace("#", "0x")}:fontsize=${
-              overlay.fontSize
-            }:enable='between(t,${overlay.timestamp},${
+            }:fontcolor=${overlay.text.replace(
+              "#",
+              "0x"
+            )}:fontsize=24:enable='between(t,${overlay.timestamp},${
               overlay.timestamp + overlay.duration
             })'`
         )
@@ -213,33 +198,100 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
   return (
     <div className={styles.editor}>
       <div className={styles.preview}>
-        <video
-          ref={videoRef}
-          src={videoUrl}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedData={() => setIsVideoLoaded(true)}
-          controls
-          style={{ width: "100%", maxWidth: "480px" }}
-        />
-        <canvas
-          ref={canvasRef}
-          className={styles.previewCanvas}
-          width={480}
-          height={270}
-        />
+        <div>
+          <h3>Original Video</h3>
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            onTimeUpdate={() => setIsVideoLoaded(true)}
+            controls
+            className={styles.videoElement}
+          />
+        </div>
+        <div>
+          <h3>Preview with Effects</h3>
+          <canvas
+            ref={canvasRef}
+            className={styles.previewCanvas}
+            width={600}
+            height={337.5}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+          />
+        </div>
       </div>
 
       <div className={styles.controls}>
-        <button onClick={addTextOverlay}>Add Text</button>
-        <button onClick={() => addVisualEffect("fade")}>Add Fade</button>
-        <button onClick={() => addVisualEffect("blur")}>Add Blur</button>
-        <button onClick={() => addVisualEffect("brightness")}>Add</button>
-        <button onClick={exportVideo} disabled={isExporting}>
+        <div className={styles.effectControls}>
+          <div>
+            <label>Fade:</label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={effects.fade}
+              onChange={(e) =>
+                setEffects({ ...effects, fade: parseFloat(e.target.value) })
+              }
+            />
+          </div>
+          <div>
+            <label>Brightness:</label>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step="0.1"
+              value={effects.brightness}
+              onChange={(e) =>
+                setEffects({
+                  ...effects,
+                  brightness: parseFloat(e.target.value),
+                })
+              }
+            />
+          </div>
+          <div>
+            <label>Blur:</label>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="0.5"
+              value={effects.blur}
+              onChange={(e) =>
+                setEffects({ ...effects, blur: parseFloat(e.target.value) })
+              }
+            />
+          </div>
+        </div>
+
+        <button onClick={addTextOverlay} className={styles.actionButton}>
+          Add Text
+        </button>
+
+        <div className={styles.textOverlays}>
+          {textOverlays.map((overlay) => (
+            <div key={overlay.id} className={styles.textOverlay}>
+              <input
+                type="text"
+                value={overlay.text}
+                onChange={(e) => handleTextEdit(overlay.id, e.target.value)}
+                onMouseDown={(e) => handleMouseDown(e, overlay.id)}
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={exportVideo}
+          disabled={isExporting}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+        >
           {isExporting ? "Exporting..." : "Export Video"}
         </button>
       </div>
-
-      <div className={styles.timeline}>{/* Timeline implementation */}</div>
     </div>
   );
 }
