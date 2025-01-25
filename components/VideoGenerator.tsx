@@ -283,6 +283,7 @@ export default function VideoGenerator() {
         value={selectedLanguage}
         onChange={(e) => setSelectedLanguage(e.target.value)}
       >
+        
         <option value="">Select a language</option>
       </select>
 
