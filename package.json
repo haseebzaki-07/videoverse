@@ -6,9 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "download-ffmpeg": "node scripts/download-ffmpeg.js"
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.4",
+    "@ffmpeg/ffmpeg": "^0.12.7",
+    "@ffmpeg/util": "^0.12.1",
     "@google-cloud/text-to-speech": "^5.8.0",
     "axios": "^1.7.9",
     "cloudinary": "^2.5.1",

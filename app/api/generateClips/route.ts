@@ -4,6 +4,8 @@ import path from "path";
 import { NextRequest } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
+import logger from "@/utils/logger";
+import { NextResponse } from "next/server";
 
 const execAsync = promisify(exec);
 
@@ -26,13 +28,18 @@ interface PexelsResponse {
 
 export async function POST(req: NextRequest) {
   try {
-    const { topic, style, language } = await req.json();
+    const { style, topic } = await req.json();
+    logger.info("Starting clip generation", { style, topic });
+
+    const videoPaths: string[] = [];
+    const TOTAL_CLIPS = 5; // Changed to generate 5 clips
 
     // Basic validation
     if (!topic) {
-      return new Response(JSON.stringify({ message: "Topic is required" }), {
-        status: 400,
-      });
+      return NextResponse.json(
+        { message: "Topic is required" },
+        { status: 400 }
+      );
     }
 
     // Ensure the videos directory exists
@@ -53,39 +60,54 @@ export async function POST(req: NextRequest) {
       {
         params: {
           query: `${topic} ${style}`.trim(),
-          per_page: 5,
-          lang: language || "en",
+          per_page: TOTAL_CLIPS, // Request exactly 5 videos
+          lang: "en",
+          orientation: "portrait",
         },
         headers: {
-          Authorization: pexelsApiKey, // Remove 'Bearer' prefix if it's already included in the key
+          Authorization: pexelsApiKey,
         },
       }
     );
 
-    console.log("Pexels API Response:", response.data);
+    logger.debug("Pexels API Response received", {
+      videosCount: response.data.videos?.length || 0,
+    });
 
     if (!response.data.videos || response.data.videos.length === 0) {
-      return new Response(
-        JSON.stringify({ message: "No videos found for the given query" }),
+      return NextResponse.json(
+        { message: "No videos found for the given query" },
         { status: 404 }
       );
     }
 
-    const videoPaths: string[] = [];
-    let videoIndex = 1;
-
-    for (const video of response.data.videos) {
-      if (!video.video_files || video.video_files.length === 0) continue;
-
-      // Get the first video file (usually the best quality)
-      const videoFile = video.video_files[0];
-      const tempFileName = `temp_${videoIndex}.mp4`;
-      const videoFileName = `video_${videoIndex}.mp4`;
-      const tempPath = path.join(videosDir, tempFileName);
+    // Process each video sequentially
+    for (
+      let i = 0;
+      i < Math.min(TOTAL_CLIPS, response.data.videos.length);
+      i++
+    ) {
+      const videoFileName = `video_${i + 1}.mp4`; // Changed to 1-based naming
+      const tempPath = path.join(videosDir, `temp_${videoFileName}`);
       const finalPath = path.join(videosDir, videoFileName);
 
+      logger.debug("Processing video clip", {
+        index: i + 1,
+        tempPath,
+        finalPath,
+      });
+
       try {
-        console.log(`Downloading video ${videoIndex} from ${videoFile.link}`);
+        const video = response.data.videos[i];
+        if (!video.video_files || video.video_files.length === 0) {
+          logger.warn(`No video files found for index ${i + 1}, skipping`);
+          continue;
+        }
+
+        const videoFile = video.video_files[0];
+        logger.debug(`Downloading video ${i + 1}`, {
+          url: videoFile.link,
+        });
 
         const videoResponse = await axios({
           method: "get",
@@ -93,78 +115,66 @@ export async function POST(req: NextRequest) {
           responseType: "stream",
         });
 
-        // Create write stream and pipe the video data
         const writer = fs.createWriteStream(tempPath);
         videoResponse.data.pipe(writer);
 
         await new Promise<void>((resolve, reject) => {
-          writer.on("finish", () => {
-            console.log(`Successfully downloaded video ${videoIndex}`);
-            resolve();
-          });
-          writer.on("error", (error) => {
-            console.error(`Error writing video ${videoIndex}:`, error);
-            reject(error);
-          });
+          writer.on("finish", resolve);
+          writer.on("error", reject);
         });
 
-        // Remove audio from the video using FFmpeg
-        console.log(`Removing audio from video ${videoIndex}`);
+        logger.debug(`Removing audio from video ${i + 1}`);
         const ffmpegCommand = `ffmpeg -i "${tempPath}" -c:v copy -an "${finalPath}"`;
 
         try {
           await execAsync(ffmpegCommand);
-          console.log(`Successfully removed audio from video ${videoIndex}`);
-
-          // Delete the temporary file
           fs.unlinkSync(tempPath);
 
+          logger.info("Successfully processed video clip", {
+            index: i + 1,
+            path: `/videos/${videoFileName}`,
+          });
+
           videoPaths.push(`/videos/${videoFileName}`);
-          videoIndex++;
         } catch (ffmpegError) {
-          console.error(
-            `Error removing audio from video ${videoIndex}:`,
-            ffmpegError instanceof Error ? ffmpegError.message : ffmpegError
-          );
-          // If FFmpeg fails, delete both temp and final files
+          logger.error("FFmpeg processing error", {
+            index: i + 1,
+            error:
+              ffmpegError instanceof Error
+                ? ffmpegError.message
+                : "Unknown error",
+          });
           if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
           if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
           continue;
         }
       } catch (downloadError) {
-        console.error(
-          `Error downloading video ${videoIndex}:`,
-          downloadError instanceof Error ? downloadError.message : downloadError
-        );
-        // Clean up any partial files
+        logger.error("Video download error", {
+          index: i + 1,
+          error:
+            downloadError instanceof Error
+              ? downloadError.message
+              : "Unknown error",
+        });
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
         if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
         continue;
       }
     }
 
-    if (videoPaths.length === 0) {
-      return new Response(
-        JSON.stringify({ message: "Failed to download any videos" }),
-        { status: 500 }
-      );
-    }
+    logger.info("Completed clip generation", {
+      totalClips: videoPaths.length,
+      paths: videoPaths,
+    });
 
-    // Return the paths of the successfully downloaded video clips
-    return new Response(
-      JSON.stringify({
-        message: "Videos downloaded successfully",
-        videoPaths,
-      }),
-      { status: 200 }
-    );
+    return NextResponse.json({ videoPaths });
   } catch (error) {
-    console.error("Error in generateClips:", error);
-    return new Response(
-      JSON.stringify({
-        message: "Internal Server Error",
-        error: error instanceof Error ? error.message : "Unknown error",
-      }),
+    logger.error("Error in generateClips", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return NextResponse.json(
+      { error: "Failed to generate video clips" },
       { status: 500 }
     );
   }

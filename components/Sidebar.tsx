@@ -5,7 +5,7 @@ export default function Sidebar() {
   return (
     <div className="sidebar">
       <div className="logo">
-        <h1>Shorts.lol</h1>
+        <h1>VideoVerse</h1>
       </div>
       <nav className='flex flex-col gap-2 border-t border-b border-gray-300 pt-2 pb-2'>
         <Link  href="/musicVideoGenerator" className="nav-link ">

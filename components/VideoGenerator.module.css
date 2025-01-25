@@ -6,7 +6,6 @@
   margin-left: 9vw;
 }
 
-
 .container .heading {
   color: #f1e7e7;
   font-size: 25px;
@@ -16,9 +15,9 @@
 .container .label {
   display: block;
   margin: 10px 0 5px;
-  font-size: 14px;         /* Adjust the font size */
-  color: #f3ebeb;          /* Light color for visibility */
-  font-weight: 500;        /* Slightly bolder text */
+  font-size: 14px; /* Adjust the font size */
+  color: #f3ebeb; /* Light color for visibility */
+  font-weight: 500; /* Slightly bolder text */
   text-transform: capitalize; /* Optional: Capitalize the first letter of each word */
 }
 .container select {
@@ -26,16 +25,16 @@
   padding: 10px;
   margin-bottom: 20px;
   border-radius: 5px;
-  border: 1px solid #2563eb;    /* Border with light blue color */
-  background-color: #2d3748;    /* Dark background for the dropdown */
-  color: #ffffff;               /* White text color */
-  font-size: 14px;       
-  overflow-y: scroll;        /* Adjust font size */
+  border: 1px solid #2563eb; /* Border with light blue color */
+  background-color: #2d3748; /* Dark background for the dropdown */
+  color: #ffffff; /* White text color */
+  font-size: 14px;
+  overflow-y: scroll; /* Adjust font size */
 }
 
 .container select:focus {
-  border-color: #4f86e2;        /* Blue border on focus */
-  outline: none;                /* Removes default focus outline */
+  border-color: #4f86e2; /* Blue border on focus */
+  outline: none; /* Removes default focus outline */
 }
 .container .stylesContainer {
   display: flex;
@@ -53,11 +52,11 @@
 }
 
 .container .stylesContainer .styleOption img {
-  width: 100%;          /* Make image take up the full width of its container */
-  height: auto;         /* Maintain aspect ratio */
-  max-width: 150px;     /* Maximum width */
-  max-height: 150px;    /* Maximum height */
-  object-fit: cover;    /* Ensures the image covers the area without distortion */
+  width: 100%; /* Make image take up the full width of its container */
+  height: auto; /* Maintain aspect ratio */
+  max-width: 150px; /* Maximum width */
+  max-height: 150px; /* Maximum height */
+  object-fit: cover; /* Ensures the image covers the area without distortion */
 }
 .container .styleOption img {
   max-width: 100%;
@@ -69,7 +68,8 @@
   font-size: 14px;
 }
 
-.container .styleOption:hover, .container .styleOption.selected {
+.container .styleOption:hover,
+.container .styleOption.selected {
   border-color: #2563eb;
 }
 
@@ -175,4 +175,95 @@
 
 .container .promptSection .generatePromptButton:hover {
   background-color: #1e40af;
+}
+
+.editorContainer {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #1e293b;
+  border-radius: 10px;
+}
+
+.downloadOriginal {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.downloadOriginal a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.speechesContainer {
+  margin-top: 2rem;
+  width: 100%;
+}
+
+.speechCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.speechCard {
+  background: #1e293b; /* Dark background to match theme */
+  border: 1px solid #3e4c5e;
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  color: #ffffff;
+}
+
+.speechCard h4 {
+  color: #60a5fa;
+  margin-bottom: 1rem;
+}
+
+.speechCard.selected {
+  border-color: #0070f3;
+  box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.2);
+}
+
+.speechContent {
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 1rem 0;
+  padding: 0.5rem;
+  background: #2d3748;
+  border-radius: 4px;
+  color: #e2e8f0;
+}
+
+.speechContent p {
+  margin: 0;
+  line-height: 1.6;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+.selectButton {
+  width: 100%;
+  padding: 0.75rem;
+  background: #0070f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.selectButton:hover:not(:disabled) {
+  background: #0051a8;
+}
+
+.selectButton:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.subheading {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #f1f5f9;
 }

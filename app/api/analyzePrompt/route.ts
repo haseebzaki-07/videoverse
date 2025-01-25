@@ -58,69 +58,23 @@ export async function POST(req: NextRequest) {
     const { prompt } = await req.json();
     console.log("User prompt received:", prompt);
 
-    // Step 1: Extract parameters from the prompt
-    const { topic, style, language, duration, ssmlGender, voiceName } =
-      await extractParameters(prompt);
-    console.log("Extracted parameters:", {
-      topic,
-      style,
-      language,
-      duration,
-      ssmlGender,
-      voiceName,
+    // Extract parameters from the prompt
+    const parameters = await extractParameters(prompt);
+    console.log("Extracted parameters:", parameters);
+
+    // Return the extracted parameters directly
+    return NextResponse.json({
+      topic: parameters.topic || "General",
+      style: parameters.style || "Cinematic",
+      language: parameters.language || "en-US",
+      duration: parameters.duration || 1,
+      ssmlGender: parameters.ssmlGender || "NEUTRAL",
+      voiceName: parameters.voiceName || "en-US-Wavenet-D",
     });
-
-    // Step 2: Call the existing video generation API
-    let videoResponse;
-    try {
-      videoResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/generateVideo`,
-        {
-          topic,
-          style,
-          language,
-          duration,
-          ssmlGender,
-          voiceName,
-        }
-      );
-      console.log("Video generation API response:", videoResponse.data);
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error("Error calling video generation API:", error.message);
-        console.error("Full error:", error.response?.data || error);
-      } else if (error instanceof Error) {
-        console.error("Error calling video generation API:", error.message);
-      } else {
-        console.error("Unknown error calling video generation API:", error);
-      }
-      return NextResponse.json(
-        { error: "Failed to generate video" },
-        { status: 500 }
-      );
-    }
-
-    // Return the final video URL
-    const { videoUrl } = videoResponse.data;
-    if (!videoUrl) {
-      return NextResponse.json(
-        { error: "Video generation failed" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ videoUrl });
   } catch (error) {
-    if (error instanceof Error) {
-      console.error("Unexpected error in processing prompt:", error.message);
-    } else {
-      console.error("Unknown error in processing prompt:", error);
-    }
+    console.error("Error in analyzePrompt:", error);
     return NextResponse.json(
-      {
-        error: "Unexpected error in processing prompt",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { error: "Failed to analyze prompt" },
       { status: 500 }
     );
   }
