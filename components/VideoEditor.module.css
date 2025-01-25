@@ -3,6 +3,8 @@
   flex-direction: column;
   gap: 20px;
   padding: 20px;
+  background-color: #0f172a;
+  color: #ffffff;
 }
 
 .preview {

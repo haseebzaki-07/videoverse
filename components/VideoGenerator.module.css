@@ -1,15 +1,138 @@
 .container {
+  max-width: 800px;
+  margin: 0 auto;
   padding: 20px;
-  background-color: #0f172a;
-  color: #ffffff;
-  font-family: Arial, sans-serif;
-  margin-left: 9vw;
+  background-color: #0f172a; /* Primary background color */
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.container .heading {
-  color: #f1e7e7;
-  font-size: 25px;
-  font-weight: 700;
+.heading {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+  color: #ffffff; /* Primary text color */
+}
+
+.stylesContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.styleOption {
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.styleOption.selected {
+  border-color: #ffffff; /* Secondary text color */
+}
+
+.promptSection {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #0f172a; /* Secondary background color */
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.textarea {
+  width: 100%;
+  height: 100px;
+  padding: 10px;
+  border: 1px solid #ffffff; /* Border color */
+  border-radius: 4px;
+  resize: none;
+  background-color: #0f172a; /* Textarea background color */
+  color: #ffffff; /* Textarea text color */
+}
+
+.generateButton,
+.generatePromptButton {
+  margin-top: 10px;
+  padding: 10px 20px;
+  background-color: #ffffff; /* Button background color */
+  color: #0f172a; /* Button text color */
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.generateButton:hover,
+.generatePromptButton:hover {
+  background-color: #e0f7fa; /* Button hover background color */
+}
+
+.speechesContainer {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #0f172a; /* Secondary background color */
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.speechCards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.speechCard {
+  padding: 10px;
+  border: 1px solid #ffffff; /* Border color */
+  border-radius: 8px;
+  background-color: #0f172a; /* Primary background color */
+  transition: background-color 0.3s;
+  color: #ffffff; /* Speech card text color */
+}
+
+.speechCard.selected {
+  background-color: #e0f7fa; /* Selected background color */
+}
+
+.speechContent {
+  margin-bottom: 10px;
+}
+
+.selectButton {
+  padding: 8px 16px;
+  background-color: #ffffff; /* Button background color */
+  color: #0f172a; /* Button text color */
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.selectButton:hover {
+  background-color: #e0f7fa; /* Button hover background color */
+}
+
+.errorMessage {
+  color: #e0f7fa; /* Error color */
+  margin-top: 10px;
+}
+
+.editorContainer {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #0f172a; /* Editor background color */
+  border-radius: 10px;
+}
+
+.downloadOriginal {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.downloadOriginal a {
+  color: #ffffff; /* Link text color */
+  text-decoration: underline;
 }
 
 .container .label {
@@ -36,20 +159,6 @@
   border-color: #4f86e2; /* Blue border on focus */
   outline: none; /* Removes default focus outline */
 }
-.container .stylesContainer {
-  display: flex;
-  gap: 15px;
-  margin: 15px 0;
-}
-
-.container .styleOption {
-  cursor: pointer;
-  border: 2px solid transparent;
-  border-radius: 10px;
-  padding: 5px;
-  text-align: center;
-  transition: border 0.3s ease;
-}
 
 .container .stylesContainer .styleOption img {
   width: 100%; /* Make image take up the full width of its container */
@@ -68,46 +177,11 @@
   font-size: 14px;
 }
 
-.container .styleOption:hover,
-.container .styleOption.selected {
-  border-color: #2563eb;
-}
-
-.container .generateButton {
-  background-color: #2563eb;
-  color: #ffffff;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  margin-top: 20px;
-}
-
-.container .generateButton:hover {
-  background-color: #1e40af;
-}
-
 .container .loadingCard {
   margin-top: 20px;
   padding: 10px;
   background-color: #569ad5;
   color: rgb(214, 194, 194);
-  border-radius: 5px;
-}
-
-.container .errorMessage {
-  margin-top: 20px;
-  padding: 10px;
-  background-color: #ef4444;
-  color: white;
-  border-radius: 5px;
-}
-
-.container .videoResult {
-  margin-top: 20px;
-  padding: 10px;
-  background-color: #22c55e;
-  color: white;
   border-radius: 5px;
 }
 
@@ -117,15 +191,6 @@
 
 .container .statusContainer label {
   margin-right: 10px;
-}
-
-.container .promptSection {
-  margin-top: 20px;
-  padding: 20px;
-  background-color: #1e293b; /* Slightly lighter background to distinguish the section */
-  border-radius: 10px;
-  color: #ffffff;
-  font-size: 16px;
 }
 
 .container .promptSection .label {
@@ -145,125 +210,13 @@
   border-radius: 5px;
 }
 
-.container .promptSection textarea {
-  width: 100%;
-  height: 100px; /* Set a default height */
-  padding: 10px;
-  border: 1px solid #2563eb;
-  border-radius: 5px;
-  background-color: #2d3748;
-  color: #ffffff;
-  font-size: 14px;
-  resize: vertical; /* Allow resizing vertically */
-}
-
 .container .promptSection textarea:focus {
   border-color: #4f86e2; /* Blue border on focus */
   outline: none; /* Removes default focus outline */
 }
 
-.container .promptSection .generatePromptButton {
-  background-color: #2563eb;
-  color: #ffffff;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  margin-top: 15px;
-  transition: background-color 0.3s ease;
-}
-
-.container .promptSection .generatePromptButton:hover {
-  background-color: #1e40af;
-}
-
-.editorContainer {
-  margin-top: 30px;
-  padding: 20px;
-  background-color: #1e293b;
-  border-radius: 10px;
-}
-
-.downloadOriginal {
-  margin-top: 20px;
-  text-align: center;
-}
-
-.downloadOriginal a {
-  color: #2563eb;
-  text-decoration: underline;
-}
-
-.speechesContainer {
-  margin-top: 2rem;
-  width: 100%;
-}
-
-.speechCards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-top: 1rem;
-}
-
-.speechCard {
-  background: #1e293b; /* Dark background to match theme */
-  border: 1px solid #3e4c5e;
-  border-radius: 8px;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-  color: #ffffff;
-}
-
-.speechCard h4 {
-  color: #60a5fa;
-  margin-bottom: 1rem;
-}
-
-.speechCard.selected {
-  border-color: #0070f3;
-  box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.2);
-}
-
-.speechContent {
-  max-height: 200px;
-  overflow-y: auto;
-  margin: 1rem 0;
-  padding: 0.5rem;
-  background: #2d3748;
-  border-radius: 4px;
-  color: #e2e8f0;
-}
-
-.speechContent p {
-  margin: 0;
-  line-height: 1.6;
-  font-size: 0.9rem;
-  white-space: pre-wrap;
-}
-
-.selectButton {
-  width: 100%;
-  padding: 0.75rem;
-  background: #0070f3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.3s ease;
-}
-
-.selectButton:hover:not(:disabled) {
-  background: #0051a8;
-}
-
-.selectButton:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
 .subheading {
   font-size: 1.5rem;
   margin-bottom: 1rem;
-  color: #f1f5f9;
+  color: #333;
 }

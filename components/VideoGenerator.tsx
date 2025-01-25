@@ -5,6 +5,7 @@ import styles from "./VideoGenerator.module.css";
 import Image from "next/image";
 import VideoEditor from "./VideoEditor";
 import logger from "@/utils/logger";
+import { useRouter } from "next/navigation";
 
 export default function VideoGenerator() {
   const [topic, setTopic] = useState<string>("");
@@ -45,6 +46,8 @@ export default function VideoGenerator() {
 
   const durations: string[] = ["30", "60", "120"];
   const voices: string[] = ["Male", "Female", "Robotic"];
+
+  const router = useRouter();
 
   const handleGenerate = async (): Promise<void> => {
     if (!topic || !style || !duration) {
@@ -283,7 +286,6 @@ export default function VideoGenerator() {
         value={selectedLanguage}
         onChange={(e) => setSelectedLanguage(e.target.value)}
       >
-        
         <option value="">Select a language</option>
       </select>
 
@@ -354,14 +356,18 @@ export default function VideoGenerator() {
       {error && <p className={styles.errorMessage}>{error}</p>}
 
       {videoUrl && (
-        <div className={styles.editorContainer}>
-          <VideoEditor videoUrl={videoUrl} />
-          <p className={styles.downloadOriginal}>
-            Download the original video{" "}
-            <a href={videoUrl} target="_blank" rel="noopener noreferrer">
-              here
-            </a>
-          </p>
+        <div className={styles.successMessage}>
+          <p>Video created successfully!</p>
+          <button
+            onClick={() =>
+              router.push(
+                `/videoEditor?videoUrl=${encodeURIComponent(videoUrl)}`
+              )
+            }
+            className={styles.generateButton}
+          >
+            Edit Video
+          </button>
         </div>
       )}
     </div>
