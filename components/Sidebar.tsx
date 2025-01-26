@@ -1,18 +1,28 @@
-"use client"
-import Link from 'next/link';
+"use client";
+import Link from "next/link";
 
 export default function Sidebar() {
   return (
     <div className="sidebar">
       <div className="logo">
-        <h1>VideoVerse</h1>
+        <Link href="/" className="hover:opacity-80 transition-opacity">
+          <h1>VideoVerse</h1>
+        </Link>
       </div>
-      <nav className='flex flex-col gap-2 border-t border-b border-gray-300 pt-2 pb-2'>
-        <Link  href="/musicVideoGenerator" className="nav-link ">
+      <nav className="flex flex-col gap-2 border-t border-b border-gray-300 pt-2 pb-2">
+        <Link href="/musicVideoGenerator" className="nav-link">
           Generate Video
         </Link>
         <Link href="/my-creations" className="nav-link">
           My Creations
+        </Link>
+        <Link
+          href={`/videoEditor?videoUrl=${encodeURIComponent(
+            "/output/final_video.mp4"
+          )}`}
+          className="nav-link"
+        >
+          Video Editor
         </Link>
       </nav>
       <div className="upgrade-section">
@@ -37,7 +47,7 @@ export default function Sidebar() {
           top: 0;
           width: 250px;
           height: 100vh;
-          background-color: #15202b;
+          background-color: #121212;
           color: white;
           display: flex;
           flex-direction: column;
