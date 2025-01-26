@@ -1,0 +1,68 @@
+.textOverlays {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.textOverlay {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1a1a1a;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #333;
+}
+
+.textInput {
+  flex: 2;
+  padding: 8px 12px;
+  background-color: #2d3748;
+  border: 1px solid #4a5568;
+  border-radius: 4px;
+  color: white;
+  font-size: 14px;
+  min-width: 200px;
+}
+
+.textInput:focus {
+  border-color: #3b82f6;
+  outline: none;
+}
+
+.colorInput {
+  width: 50px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #4a5568;
+  border-radius: 4px;
+  background: #2d3748;
+  cursor: pointer;
+}
+
+.timeControl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timeInput {
+  width: 70px;
+  padding: 8px;
+  background-color: #2d3748;
+  border: 1px solid #4a5568;
+  border-radius: 4px;
+  color: white;
+  font-size: 14px;
+}
+
+.timeInput:focus {
+  border-color: #3b82f6;
+  outline: none;
+}
+
+.label {
+  color: #9ca3af;
+  font-size: 14px;
+}

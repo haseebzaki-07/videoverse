@@ -17,6 +17,7 @@
 /.next/
 /out/
 config/google-tts-key.json
+public/output/final_video.mp4
 
 
 # production

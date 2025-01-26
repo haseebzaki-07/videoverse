@@ -285,8 +285,20 @@ export default function VideoGenerator() {
       <select
         value={selectedLanguage}
         onChange={(e) => setSelectedLanguage(e.target.value)}
+        className="mt-2"
       >
         <option value="">Select a language</option>
+        <option value="English">English</option>
+        <option value="Spanish">Spanish</option>
+        <option value="French">French</option>
+        <option value="German">German</option>
+        <option value="Italian">Italian</option>
+        <option value="Portuguese">Portuguese</option>
+        <option value="Japanese">Japanese</option>
+        <option value="Korean">Korean</option>
+        <option value="Chinese">Chinese</option>
+        <option value="Hindi">Hindi</option>
+        <option value="Arabic">Arabic</option>
       </select>
 
       <h2 className={styles.heading}>Voice Over</h2>

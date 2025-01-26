@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import styles from "./VideoEditor.module.css";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile } from "@ffmpeg/util";
+import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
 interface TextOverlay {
   id: string;
@@ -10,6 +10,10 @@ interface TextOverlay {
   y: number;
   isDragging: boolean;
   isEditing: boolean;
+  color: string;
+  fontSize: number;
+  timestamp: number;
+  duration: number;
 }
 
 interface Effects {
@@ -17,6 +21,25 @@ interface Effects {
   brightness: number;
   blur: number;
 }
+
+const verifyVideo = (file: Blob): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(video.src);
+      resolve(true);
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      resolve(false);
+    };
+
+    video.src = URL.createObjectURL(file);
+  });
+};
 
 export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
@@ -27,6 +50,8 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
   });
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportStatus, setExportStatus] = useState<string>("");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -54,13 +79,19 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
       canvasRef.current.height
     );
 
-    // Draw text overlays
+    // Draw text overlays - only if within their time window
     ctx.filter = "none";
     ctx.globalAlpha = 1;
+    const currentTime = videoRef.current.currentTime;
     textOverlays.forEach((overlay) => {
-      ctx.font = "24px Arial";
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(overlay.text, overlay.x, overlay.y);
+      if (
+        currentTime >= overlay.timestamp &&
+        currentTime <= overlay.timestamp + overlay.duration
+      ) {
+        ctx.font = `${overlay.fontSize}px Arial`;
+        ctx.fillStyle = overlay.color;
+        ctx.fillText(overlay.text, overlay.x, overlay.y);
+      }
     });
   };
 
@@ -72,6 +103,10 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
       y: 50,
       isDragging: false,
       isEditing: false,
+      color: "#ffffff",
+      fontSize: 24,
+      timestamp: videoRef.current?.currentTime || 0, // Set timestamp to current video time
+      duration: 3, // Default 3 second duration
     };
     setTextOverlays([...textOverlays, newOverlay]);
   };
@@ -120,76 +155,144 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
     );
   };
 
+  const handleColorChange = (overlayId: string, newColor: string) => {
+    setTextOverlays((overlays) =>
+      overlays.map((overlay) =>
+        overlay.id === overlayId ? { ...overlay, color: newColor } : overlay
+      )
+    );
+  };
+
   const exportVideo = async () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || !canvasRef.current) return;
 
     setIsExporting(true);
+    setExportStatus("Initializing...");
+    setExportProgress(0);
 
     try {
       const ffmpeg = new FFmpeg();
+
+      // Load FFmpeg
+      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd";
       await ffmpeg.load({
-        coreURL: "/ffmpeg/ffmpeg-core.js",
-        wasmURL: "/ffmpeg/ffmpeg-core.wasm",
-        workerURL: "/ffmpeg/ffmpeg-core.worker.js",
+        coreURL: await toBlobURL(
+          `${baseURL}/ffmpeg-core.js`,
+          "text/javascript"
+        ),
+        wasmURL: await toBlobURL(
+          `${baseURL}/ffmpeg-core.wasm`,
+          "application/wasm"
+        ),
+        workerURL: await toBlobURL(
+          `${baseURL}/ffmpeg-core.worker.js`,
+          "text/javascript"
+        ),
       });
 
-      // Input video file
-      try {
-        const videoData = await fetchFile(videoUrl);
-        await ffmpeg.writeFile("input.mp4", videoData);
-      } catch (error) {
-        console.error("Error fetching video file:", error);
-        setIsExporting(false);
-        return;
+      // Write the input file
+      setExportStatus("Loading video...");
+      const videoData = await fetchFile(videoUrl);
+      const videoBlob = new Blob([videoData], { type: "video/mp4" });
+      const isValid = await verifyVideo(videoBlob);
+
+      if (!isValid) {
+        throw new Error("Invalid input video format");
       }
 
-      // Apply effects (currently, this is an example of adding text overlays)
-      const filters = textOverlays
-        .map(
-          (overlay) =>
-            `drawtext=text='${overlay.text}':x=${overlay.x}:y=${
-              overlay.y
-            }:fontcolor=${overlay.text.replace(
-              "#",
-              "0x"
-            )}:fontsize=24:enable='between(t,${overlay.timestamp},${
+      await ffmpeg.writeFile("input.mp4", videoData);
+
+      // Get input video information
+      try {
+        await ffmpeg.exec(["-i", "input.mp4", "-f", "null", "-"]);
+      } catch (error) {
+        console.log("Input video info:", error.message);
+      }
+
+      // Prepare filters
+      const filters = [];
+
+      // Add effects
+      if (effects.fade !== 1) filters.push(`fade=t=in:st=0:d=1`);
+      if (effects.brightness !== 1)
+        filters.push(`eq=brightness=${effects.brightness}`);
+      if (effects.blur > 0) filters.push(`gblur=sigma=${effects.blur}`);
+
+      // Add text overlays
+      textOverlays.forEach((overlay) => {
+        filters.push(
+          `drawtext=text='${overlay.text}':x=${overlay.x}:y=${overlay.y}:` +
+            `fontcolor=${overlay.color.replace("#", "0x")}:fontsize=${
+              overlay.fontSize
+            }:` +
+            `enable='between(t,${overlay.timestamp},${
               overlay.timestamp + overlay.duration
             })'`
-        )
-        .join(",");
-
-      try {
-        await ffmpeg.run(
-          "-i",
-          "input.mp4",
-          "-vf",
-          filters,
-          "-c:v",
-          "libx264",
-          "output.mp4"
         );
+      });
+
+      const filterString = filters.join(",") || "null";
+
+      setExportStatus("Applying effects...");
+      // Updated FFmpeg command with more conservative settings
+      await ffmpeg.exec([
+        "-i",
+        "input.mp4",
+        "-vf",
+        filterString,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "slow", // Changed from medium to slow for better compatibility
+        "-profile:v",
+        "baseline",
+        "-level",
+        "3.0",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "copy", // Changed from aac to copy to preserve original audio
+        "-y", // Overwrite output files without asking
+        "output.mp4",
+      ]);
+
+      // Verify the output file was created
+      try {
+        await ffmpeg.exec(["-i", "output.mp4", "-f", "null", "-"]);
       } catch (error) {
-        console.error("Error running FFmpeg command:", error);
-        setIsExporting(false);
-        return;
+        console.log("Output video info:", error.message);
       }
 
-      // Save the output video
-      try {
-        const data = ffmpeg.FS("readFile", "output.mp4");
-        const url = URL.createObjectURL(
-          new Blob([data.buffer], { type: "video/mp4" })
-        );
+      setExportStatus("Creating final video...");
+      const data = await ffmpeg.readFile("output.mp4");
 
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "edited_video.mp4";
-        a.click();
-      } catch (error) {
-        console.error("Error reading output video file:", error);
-      }
+      // Create blob with specific codecs in the type
+      const url = URL.createObjectURL(
+        new Blob([data.buffer], {
+          type: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+        })
+      );
+
+      // Create and trigger download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "edited_video.mp4";
+      document.body.appendChild(a); // Append to body
+      a.click();
+      document.body.removeChild(a); // Clean up
+
+      URL.revokeObjectURL(url);
+      setExportStatus("Export complete!");
+
+      setTimeout(() => {
+        setExportStatus("");
+        setExportProgress(0);
+      }, 3000);
     } catch (error) {
-      console.error("Error initializing FFmpeg:", error);
+      console.error("Error during video export:", error);
+      setExportStatus("Export failed");
     } finally {
       setIsExporting(false);
     }
@@ -276,10 +379,60 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
             <div key={overlay.id} className={styles.textOverlay}>
               <input
                 type="text"
+                className={styles.textInput}
                 value={overlay.text}
                 onChange={(e) => handleTextEdit(overlay.id, e.target.value)}
                 onMouseDown={(e) => handleMouseDown(e, overlay.id)}
+                placeholder="Enter text..."
               />
+
+              <input
+                type="color"
+                className={styles.colorInput}
+                value={overlay.color}
+                onChange={(e) => handleColorChange(overlay.id, e.target.value)}
+                title="Text color"
+              />
+
+              <div className={styles.timeControl}>
+                <label className={styles.label}>Start:</label>
+                <input
+                  type="number"
+                  className={styles.timeInput}
+                  min="0"
+                  step="0.1"
+                  value={overlay.timestamp}
+                  onChange={(e) =>
+                    setTextOverlays((overlays) =>
+                      overlays.map((o) =>
+                        o.id === overlay.id
+                          ? { ...o, timestamp: parseFloat(e.target.value) }
+                          : o
+                      )
+                    )
+                  }
+                />
+              </div>
+
+              <div className={styles.timeControl}>
+                <label className={styles.label}>Duration:</label>
+                <input
+                  type="number"
+                  className={styles.timeInput}
+                  min="0.1"
+                  step="0.1"
+                  value={overlay.duration}
+                  onChange={(e) =>
+                    setTextOverlays((overlays) =>
+                      overlays.map((o) =>
+                        o.id === overlay.id
+                          ? { ...o, duration: parseFloat(e.target.value) }
+                          : o
+                      )
+                    )
+                  }
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -287,9 +440,41 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
         <button
           onClick={exportVideo}
           disabled={isExporting}
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2
+            ${
+              isExporting
+                ? "bg-gray-500 cursor-not-allowed"
+                : "bg-green-500 hover:bg-green-600"
+            }`}
         >
-          {isExporting ? "Exporting..." : "Export Video"}
+          {isExporting ? (
+            <>
+              <svg
+                className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              {exportStatus || "Exporting..."}{" "}
+              {exportProgress > 0 && `(${exportProgress}%)`}
+            </>
+          ) : (
+            "Export Video"
+          )}
         </button>
       </div>
     </div>
