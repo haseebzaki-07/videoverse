@@ -1,6 +1,10 @@
 import axios, { AxiosResponse } from "axios";
 import { NextResponse, NextRequest } from "next/server";
 
+interface VideoResponse {
+  output: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const {
@@ -130,26 +134,29 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 4: Call the createMusicVideo API to combine video clips and audio
-    let videoUrlResponse: AxiosResponse<{ output: string }>;
+    let videoUrlResponse: AxiosResponse<VideoResponse>;
     try {
-      videoUrlResponse = await axios.get(
+      videoUrlResponse = await axios.get<VideoResponse>(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/createMusicVideo`,
         {
           params: {
-            videoPaths: videoPaths.join(","), // Send the video paths as a comma-separated string
-            audioPath, // Pass the generated audio path
+            videoPaths: videoPaths.join(","),
+            audioPath,
           },
         }
       );
       console.log("createMusicVideo API response:", videoUrlResponse.data);
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        console.error("Error calling createMusicVideo API:", error.message);
-        console.error("Full error:", error.response?.data || error);
-      } else if (error instanceof Error) {
-        console.error("Error calling createMusicVideo API:", error.message);
+        console.error(
+          "Error calling createMusicVideo API:",
+          error.response?.data || error
+        );
       } else {
-        console.error("Unknown error calling createMusicVideo API:", error);
+        console.error(
+          "Unknown error:",
+          error instanceof Error ? error.message : "Unknown error"
+        );
       }
       return NextResponse.json(
         { error: "Failed to create final video" },

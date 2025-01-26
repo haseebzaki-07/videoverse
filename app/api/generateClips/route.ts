@@ -13,17 +13,21 @@ const execAsync = promisify(exec);
 const pexelsApiKey = process.env.PEXELS_API_KEY!;
 
 // Define interfaces for Pexels API response
-interface VideoFile {
+interface PexelsVideoFile {
   link: string;
   quality: string;
+  width: number;
+  height: number;
 }
 
-interface Video {
-  video_files: VideoFile[];
+interface PexelsVideo {
+  video_files: PexelsVideoFile[];
+  width: number;
+  height: number;
 }
 
 interface PexelsResponse {
-  videos: Video[];
+  videos: PexelsVideo[];
 }
 
 export async function POST(req: NextRequest) {
@@ -32,7 +36,7 @@ export async function POST(req: NextRequest) {
     logger.info("Starting clip generation", { style, topic });
 
     const videoPaths: string[] = [];
-    const TOTAL_CLIPS = 5; // Changed to generate 5 clips
+    const TOTAL_CLIPS = 5;
 
     // Basic validation
     if (!topic) {
@@ -55,17 +59,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Make a request to the Pexels API to search for videos
+    // Request more videos than needed to account for filtering
     const response = await axios.get<PexelsResponse>(
-      "https://api.pexels.com/videos/search",
+      `https://api.pexels.com/videos/search`,
       {
+        headers: { Authorization: pexelsApiKey },
         params: {
           query: `${topic} ${style}`.trim(),
-          per_page: TOTAL_CLIPS, // Request exactly 5 videos
-          lang: "en",
-          orientation: "portrait",
-        },
-        headers: {
-          Authorization: pexelsApiKey,
+          per_page: TOTAL_CLIPS * 3, // Request more videos to filter
+          orientation: "portrait", // Request only portrait videos
         },
       }
     );
@@ -81,13 +83,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Filter for portrait videos (height > width)
+    const portraitVideos = response.data.videos.filter(
+      (video) => video.height > video.width
+    );
+
+    logger.debug("Filtered portrait videos", {
+      totalVideos: response.data.videos.length,
+      portraitVideos: portraitVideos.length,
+    });
+
     // Process each video sequentially
-    for (
-      let i = 0;
-      i < Math.min(TOTAL_CLIPS, response.data.videos.length);
-      i++
-    ) {
-      const videoFileName = `video_${i + 1}.mp4`; // Changed to 1-based naming
+    for (let i = 0; i < Math.min(TOTAL_CLIPS, portraitVideos.length); i++) {
+      const videoFileName = `video_${i + 1}.mp4`;
       const tempPath = path.join(videosDir, `temp_${videoFileName}`);
       const finalPath = path.join(videosDir, videoFileName);
 
@@ -98,20 +106,26 @@ export async function POST(req: NextRequest) {
       });
 
       try {
-        const video = response.data.videos[i];
+        const video = portraitVideos[i];
         if (!video.video_files || video.video_files.length === 0) {
           logger.warn(`No video files found for index ${i + 1}, skipping`);
           continue;
         }
 
-        const videoFile = video.video_files[0];
+        // Find the best quality portrait video file
+        const portraitFile =
+          video.video_files.find(
+            (file) => file.height > file.width && file.quality === "hd"
+          ) || video.video_files[0];
+
         logger.debug(`Downloading video ${i + 1}`, {
-          url: videoFile.link,
+          url: portraitFile.link,
+          dimensions: `${portraitFile.width}x${portraitFile.height}`,
         });
 
         const videoResponse = await axios({
           method: "get",
-          url: videoFile.link,
+          url: portraitFile.link,
           responseType: "stream",
         });
 
@@ -123,7 +137,7 @@ export async function POST(req: NextRequest) {
           writer.on("error", reject);
         });
 
-        logger.debug(`Removing audio from video ${i + 1}`);
+        // Remove audio and ensure portrait orientation
         const ffmpegCommand = `ffmpeg -i "${tempPath}" -c:v copy -an "${finalPath}"`;
 
         try {
@@ -171,10 +185,9 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     logger.error("Error in generateClips", {
       error: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
     });
     return NextResponse.json(
-      { error: "Failed to generate video clips" },
+      { error: "Failed to generate clips" },
       { status: 500 }
     );
   }

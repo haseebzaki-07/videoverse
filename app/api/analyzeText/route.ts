@@ -19,8 +19,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Calculate the approximate word count
-    const wordsPerMinute = 140;
-    const wordCount = wordsPerMinute * duration;
+    const wordCount = 140 * duration;
     logger.debug("Calculated target word count", { wordCount });
 
     // Construct a base prompt based on the keywords and duration
@@ -143,7 +142,7 @@ function formatTime(seconds: number): string {
 
 function generateSRT(text: string, duration: number, outputPath: string) {
   try {
-    const wordsPerMinute = 140;
+    // const wordsPerMinute = 150; // Remove if not used
     const words = text.split(" ");
     const totalWords = words.length;
 

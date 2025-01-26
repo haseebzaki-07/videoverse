@@ -1,83 +1,117 @@
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
-import fs from "fs";
-import path from "path";
 import { promisify } from "util";
+import { statSync, existsSync, readFileSync } from "fs";
+import path from "path";
+
 import logger from "@/utils/logger";
 
 const execAsync = promisify(exec);
-const accessAsync = promisify(fs.access);
-const unlinkAsync = promisify(fs.unlink);
-
-const srtPath = path.join(process.cwd(), "public", "output", "captions.srt");
 
 // Helper function to check if video is ready
-async function checkVideoReady(outputPath: string): Promise<boolean> {
+const checkVideoReady = async (filePath: string): Promise<boolean> => {
   try {
-    // Check if file exists and is not empty
-    const stats = fs.statSync(outputPath);
-    if (stats.size === 0) return false;
+    logger.info("Checking if video file is ready", { filePath });
 
-    // Check if file is still being written
+    // Check if the file exists and is accessible
+    const stats = statSync(filePath);
+    logger.debug("File stats retrieved", {
+      filePath,
+      size: stats.size,
+      lastModified: stats.mtime,
+    });
+
+    if (stats.size === 0) {
+      logger.warn("File size is 0. File may not be ready.", { filePath });
+      return false;
+    }
+
+    // Check if the file is still being written to
     const initialSize = stats.size;
-    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second
-    const currentSize = fs.statSync(outputPath).size;
+    logger.debug("Initial file size recorded", { filePath, initialSize });
 
-    // If size is still changing, file is still being written
-    if (initialSize !== currentSize) return false;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Verify video file integrity
-    const { stderr } = await execAsync(`ffprobe -v error "${outputPath}"`);
+    const finalSize = statSync(filePath).size;
+    logger.debug("Final file size recorded after delay", {
+      filePath,
+      finalSize,
+    });
 
-    return !stderr; // If no error, video is valid
-  } catch {
+    const isReady = initialSize === finalSize;
+
+    if (isReady) {
+      logger.info("File is ready for further processing", { filePath });
+    } else {
+      logger.warn("File size changed, indicating it is still being written", {
+        filePath,
+        initialSize,
+        finalSize,
+      });
+    }
+
+    return isReady;
+  } catch (error) {
+    logger.error("Error checking if video file is ready", {
+      filePath,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return false;
   }
-}
+};
 
 export async function GET() {
   try {
     const fileListPath = path.join(
       process.cwd(),
-      "public/output/file-list.txt"
+      "public",
+      "output",
+      "file-list.txt"
     );
-    const audioPath = path.join(process.cwd(), "public/generated_speech.mp3");
+    const audioPath = path.join(
+      process.cwd(),
+      "public",
+      "generated_speech.mp3"
+    );
     const outputPath = path.join(
       process.cwd(),
-      "public/output/final_video.mp4"
+      "public",
+      "output",
+      "final_video.mp4"
     );
 
     // Log initial state and file existence
     logger.info("Starting final video creation", {
       fileListPath,
-      fileListExists: fs.existsSync(fileListPath),
+      fileListExists: existsSync(fileListPath),
       audioPath,
-      audioExists: fs.existsSync(audioPath),
+      audioExists: existsSync(audioPath),
       outputPath,
     });
 
     // Check if required files exist
-    if (!fs.existsSync(fileListPath)) {
+    if (!existsSync(fileListPath)) {
       throw new Error("File list not found");
     }
-    if (!fs.existsSync(audioPath)) {
+    if (!existsSync(audioPath)) {
       throw new Error("Audio file not found");
     }
 
     // Log file contents for debugging
-    const fileListContent = fs.readFileSync(fileListPath, "utf-8");
+    const fileListContent = readFileSync(fileListPath, "utf-8");
     logger.debug("File list contents", { content: fileListContent });
 
     // Get audio duration for logging
     try {
+      const audioStats = statSync(audioPath);
       const { stdout: audioDuration } = await execAsync(
         `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`
       );
       const duration = parseFloat(audioDuration);
       logger.info("Audio file details", {
         duration,
-        exists: fs.existsSync(audioPath),
-        size: fs.statSync(audioPath).size,
+        exists: existsSync(audioPath),
+        size: audioStats.size,
       });
     } catch (error) {
       logger.error("Error getting audio duration", {
@@ -123,10 +157,10 @@ export async function GET() {
         throw new Error("Video generation timed out");
       }
 
-      const outputStats = fs.statSync(outputPath);
+      const outputStats = statSync(outputPath);
       logger.info("Successfully created final video", {
         outputSize: outputStats.size,
-        outputExists: fs.existsSync(outputPath),
+        outputExists: existsSync(outputPath),
         outputModified: outputStats.mtime,
       });
 
@@ -152,34 +186,16 @@ export async function GET() {
       throw ffmpegError;
     }
   } catch (error) {
-    // Log detailed error information
+    const typedError = error as Error;
     logger.error("Error in final video creation", {
-      error:
-        error instanceof Error
-          ? {
-              message: error.message,
-              stack: error.stack,
-              name: error.name,
-            }
-          : "Unknown error",
-      filesExist: {
-        fileList: fs.existsSync(
-          path.join(process.cwd(), "public/output/file-list.txt")
-        ),
-        audio: fs.existsSync(
-          path.join(process.cwd(), "public/generated_speech.mp3")
-        ),
-        output: fs.existsSync(
-          path.join(process.cwd(), "public/output/final_video.mp4")
-        ),
+      error: {
+        message: typedError.message,
+        stack: typedError.stack,
+        name: typedError.name,
       },
     });
-
     return NextResponse.json(
-      {
-        error: "Failed to generate video",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { error: "Failed to generate video" },
       { status: 500 }
     );
   }

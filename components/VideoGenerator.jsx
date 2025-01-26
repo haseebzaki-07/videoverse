@@ -1,26 +1,25 @@
 "use client";
-import axios from "axios";
 import { useState } from "react";
 import styles from "./VideoGenerator.module.css";
 import Image from "next/image";
-import VideoEditor from "./VideoEditor";
 import logger from "@/utils/logger";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 
 export default function VideoGenerator() {
-  const [topic, setTopic] = useState<string>("");
-  const [style, setStyle] = useState<string>("");
-  const [duration, setDuration] = useState<string>("");
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("");
-  const [voice, setVoice] = useState<string>("");
-  const [videoUrl, setVideoUrl] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>("");
-  const [userPrompt, setUserPrompt] = useState<string>("");
-  const [generatedSpeeches, setGeneratedSpeeches] = useState<string[]>([]);
-  const [selectedSpeech, setSelectedSpeech] = useState<string>("");
+  const [topic, setTopic] = useState("");
+  const [style, setStyle] = useState("");
+  const [duration, setDuration] = useState("");
+  const [selectedLanguage, setSelectedLanguage] = useState("");
+  const [voice, setVoice] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [userPrompt, setUserPrompt] = useState("");
+  const [generatedSpeeches, setGeneratedSpeeches] = useState([]);
+  const [selectedSpeech, setSelectedSpeech] = useState("");
 
-  const topics: string[] = [
+  const topics = [
     "Ambient Sound",
     "Random AI",
     "Nature",
@@ -44,12 +43,12 @@ export default function VideoGenerator() {
     { name: "Environment", image: "/images/environment.avif" },
   ];
 
-  const durations: string[] = ["30", "60", "120"];
-  const voices: string[] = ["Male", "Female", "Robotic"];
+  const durations = ["30", "60", "120"];
+  const voices = ["Male", "Female", "Robotic"];
 
   const router = useRouter();
 
-  const handleGenerate = async (): Promise<void> => {
+  const handleGenerate = async () => {
     if (!topic || !style || !duration) {
       setError("Please fill in all required fields");
       return;
@@ -57,7 +56,7 @@ export default function VideoGenerator() {
 
     setLoading(true);
     setError("");
-    setGeneratedSpeeches([]); // Clear previous speeches
+    setGeneratedSpeeches([]);
 
     try {
       logger.info("Starting speech generation with input fields", {
@@ -74,7 +73,7 @@ export default function VideoGenerator() {
           topic,
           style,
           language: selectedLanguage || "en-US",
-          duration: parseInt(duration) / 60, // Convert seconds to minutes
+          duration: parseInt(duration) / 60,
           ssmlGender: voice || "NEUTRAL",
           voiceName: "en-US-Wavenet-D",
         }
@@ -96,7 +95,7 @@ export default function VideoGenerator() {
     }
   };
 
-  const handlePromptGenerate = async (): Promise<void> => {
+  const handlePromptGenerate = async () => {
     if (!userPrompt.trim()) {
       setError("Please enter a valid prompt.");
       return;
@@ -104,11 +103,12 @@ export default function VideoGenerator() {
 
     setLoading(true);
     setError("");
-    setGeneratedSpeeches([]); // Clear previous speeches
+    setGeneratedSpeeches([]);
 
     try {
-      // Step 1: Analyze prompt to get parameters
       logger.info("Starting prompt analysis", { prompt: userPrompt });
+
+      // Step 1: Analyze the prompt first
       const promptAnalysis = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/analyzePrompt`,
         { prompt: userPrompt }
@@ -118,7 +118,7 @@ export default function VideoGenerator() {
         throw new Error("Failed to analyze prompt");
       }
 
-      // Step 2: Generate speeches using the extracted parameters
+      // Step 2: Use the analyzed data for text analysis
       const analyzeResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/analyzeText`,
         {
@@ -135,28 +135,28 @@ export default function VideoGenerator() {
         throw new Error("No speeches were generated");
       }
 
-      // Step 3: Update UI with speeches and parameters
       logger.info("Successfully generated speeches", {
         speechCount: analyzeResponse.data.speeches.length,
       });
 
+      // Update UI state with the results
       setGeneratedSpeeches(analyzeResponse.data.speeches);
-
-      // Update form fields with extracted parameters
       setTopic(promptAnalysis.data.topic || "");
       setStyle(promptAnalysis.data.style || "Cinematic");
       setDuration(String(promptAnalysis.data.duration * 60) || "60");
       setSelectedLanguage(promptAnalysis.data.language || "en-US");
       setVoice(promptAnalysis.data.ssmlGender || "NEUTRAL");
     } catch (error) {
-      logger.error("Error in handlePromptGenerate", { error });
+      logger.error("Error in handlePromptGenerate", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
       handleAxiosError(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSpeechSelect = async (speech: string) => {
+  const handleSpeechSelect = async (speech) => {
     if (!speech) {
       setError("Invalid speech selected");
       return;
@@ -167,12 +167,11 @@ export default function VideoGenerator() {
     setError("");
 
     try {
-      // Step 1: Generate video clips
       logger.info("Starting video clips generation");
       const clipsResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/generateClips`,
         {
-          style: style || "Cinematic", // Ensure style is never null
+          style: style || "Cinematic",
           topic,
           duration: parseInt(duration) || 60,
         }
@@ -182,7 +181,6 @@ export default function VideoGenerator() {
         throw new Error("No video clips were generated");
       }
 
-      // Step 2: Generate TTS from selected speech
       logger.info("Starting TTS process");
       const ttsResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/tts`,
@@ -198,7 +196,6 @@ export default function VideoGenerator() {
         throw new Error("Failed to generate audio");
       }
 
-      // Step 3: Create final video
       logger.info("Starting final video creation");
       const videoResponse = await axios.get(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/createMusicVideo`
@@ -218,7 +215,7 @@ export default function VideoGenerator() {
     }
   };
 
-  const handleAxiosError = (error: unknown): void => {
+  const handleAxiosError = (error) => {
     console.error("Error generating video:", error);
 
     if (axios.isAxiosError(error)) {

@@ -16,9 +16,16 @@
 # next.js
 /.next/
 /out/
-config/google-tts-key.json
-public/output/final_video.mp4
 
+# Generated media files
+/public/generated_speech.mp3
+/public/videos/*
+/public/output/final_video.mp4
+/public/output/file-list.txt
+
+# Keep the directories but ignore contents
+!/public/videos/.gitkeep
+!/public/output/.gitkeep
 
 # production
 /build
@@ -33,7 +40,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 
 # vercel

@@ -1,7 +1,6 @@
 // import PlaySound from '@/components/PlaySound';
 import VideoGenerator from "@/components/VideoGenerator";
 import Head from "next/head";
-import Link from "next/link";
 
 export default function Home() {
   return (
@@ -18,7 +17,6 @@ export default function Home() {
               Video Generator
             </span>
           </h1>
-          
         </div>
         <VideoGenerator />
       </main>

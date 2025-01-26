@@ -1,28 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import styles from "./VideoEditor.module.css";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
-interface TextOverlay {
-  id: string;
-  text: string;
-  x: number;
-  y: number;
-  isDragging: boolean;
-  isEditing: boolean;
-  color: string;
-  fontSize: number;
-  timestamp: number;
-  duration: number;
-}
 
-interface Effects {
-  fade: number;
-  brightness: number;
-  blur: number;
-}
 
-const verifyVideo = (file: Blob): Promise<boolean> => {
+const verifyVideo = (file) => {
   return new Promise((resolve) => {
     const video = document.createElement("video");
     video.preload = "metadata";
@@ -41,27 +24,21 @@ const verifyVideo = (file: Blob): Promise<boolean> => {
   });
 };
 
-export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
-  const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
-  const [effects, setEffects] = useState<Effects>({
+export default function VideoEditor({ videoUrl }) {
+  const [textOverlays, setTextOverlays] = useState([]);
+  const [effects, setEffects] = useState({
     fade: 1,
     brightness: 1,
     blur: 0,
   });
-  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
-  const [exportStatus, setExportStatus] = useState<string>("");
+  const [exportStatus, setExportStatus] = useState("");
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
 
-  useEffect(() => {
-    const interval = setInterval(updateCanvas, 1000 / 30); // 30 FPS
-    return () => clearInterval(interval);
-  }, [textOverlays, effects]);
-
-  const updateCanvas = () => {
+  const updateCanvas = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
     const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
@@ -79,7 +56,7 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
       canvasRef.current.height
     );
 
-    // Draw text overlays - only if within their time window
+    // Draw text overlays
     ctx.filter = "none";
     ctx.globalAlpha = 1;
     const currentTime = videoRef.current.currentTime;
@@ -93,10 +70,15 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
         ctx.fillText(overlay.text, overlay.x, overlay.y);
       }
     });
-  };
+  }, [textOverlays, effects]);
+
+  useEffect(() => {
+    const interval = setInterval(updateCanvas, 1000 / 30);
+    return () => clearInterval(interval);
+  }, [updateCanvas]);
 
   const addTextOverlay = () => {
-    const newOverlay: TextOverlay = {
+    const newOverlay = {
       id: Date.now().toString(),
       text: "New Text",
       x: 50,
@@ -111,22 +93,24 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
     setTextOverlays([...textOverlays, newOverlay]);
   };
 
-  const handleMouseDown = (e: React.MouseEvent, overlayId: string) => {
+  const handleMouseDown = (e, overlayId) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
     setTextOverlays((overlays) =>
       overlays.map((overlay) =>
-        overlay.id === overlayId ? { ...overlay, isDragging: true } : overlay
+        overlay.id === overlayId
+          ? { ...overlay, isDragging: true, x: mouseX, y: mouseY }
+          : overlay
       )
     );
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = (e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -147,7 +131,7 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
     );
   };
 
-  const handleTextEdit = (overlayId: string, newText: string) => {
+  const handleTextEdit = (overlayId, newText) => {
     setTextOverlays((overlays) =>
       overlays.map((overlay) =>
         overlay.id === overlayId ? { ...overlay, text: newText } : overlay
@@ -155,7 +139,7 @@ export default function VideoEditor({ videoUrl }: { videoUrl: string }) {
     );
   };
 
-  const handleColorChange = (overlayId: string, newColor: string) => {
+  const handleColorChange = (overlayId, newColor) => {
     setTextOverlays((overlays) =>
       overlays.map((overlay) =>
         overlay.id === overlayId ? { ...overlay, color: newColor } : overlay
