@@ -23,6 +23,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "utils/createVideo.ts", "utils/generateImages.ts", "components/VideoEditor.jsx", "components/VideoGenerator.jsx"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "utils/createVideo.ts", "utils/generateImages.ts", "components/VideoEditor.jsx", "components/VideoGenerator.jsx", "components/VideoEditorClient.jsx"],
   "exclude": ["node_modules"]
 }
