@@ -2,8 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import styles from "./VideoEditor.module.css";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
-
-
+import { useSearchParams } from "next/navigation";
 
 const verifyVideo = (file) => {
   return new Promise((resolve) => {
@@ -24,7 +23,9 @@ const verifyVideo = (file) => {
   });
 };
 
-export default function VideoEditor({ videoUrl }) {
+export default function VideoEditor() {
+  const searchParams = useSearchParams();
+  const [videoUrl, setVideoUrl] = useState("");
   const [textOverlays, setTextOverlays] = useState([]);
   const [effects, setEffects] = useState({
     fade: 1,
@@ -34,9 +35,47 @@ export default function VideoEditor({ videoUrl }) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [exportStatus, setExportStatus] = useState("");
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [error, setError] = useState("");
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const url = searchParams.get("videoUrl");
+    if (url) {
+      // Convert relative URL to absolute URL if needed
+      const absoluteUrl = url.startsWith("/")
+        ? `${window.location.origin}${url}`
+        : url;
+      setVideoUrl(decodeURIComponent(absoluteUrl));
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const loadVideo = async () => {
+      try {
+        const response = await fetch(videoUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const blob = await response.blob();
+        const isValid = await verifyVideo(blob);
+        if (!isValid) {
+          throw new Error("Invalid video format");
+        }
+        setIsVideoLoaded(true);
+      } catch (err) {
+        console.error("Error loading video:", err);
+        setError(err.message);
+      }
+    };
+
+    if (videoUrl) {
+      loadVideo();
+    }
+  }, [videoUrl]);
 
   const updateCanvas = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -283,184 +322,206 @@ export default function VideoEditor({ videoUrl }) {
   };
 
   return (
-    <div className={styles.editor}>
-      <div className={styles.preview}>
-        <div>
-          <h3>Original Video</h3>
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            onTimeUpdate={() => setIsVideoLoaded(true)}
-            controls
-            className={styles.videoElement}
-          />
-        </div>
-        <div>
-          <h3>Preview with Effects</h3>
-          <canvas
-            ref={canvasRef}
-            className={styles.previewCanvas}
-            width={600}
-            height={337.5}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-          />
-        </div>
-      </div>
-
-      <div className={styles.controls}>
-        <div className={styles.effectControls}>
-          <div>
-            <label>Fade:</label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={effects.fade}
-              onChange={(e) =>
-                setEffects({ ...effects, fade: parseFloat(e.target.value) })
-              }
-            />
-          </div>
-          <div>
-            <label>Brightness:</label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={effects.brightness}
-              onChange={(e) =>
-                setEffects({
-                  ...effects,
-                  brightness: parseFloat(e.target.value),
-                })
-              }
-            />
-          </div>
-          <div>
-            <label>Blur:</label>
-            <input
-              type="range"
-              min="0"
-              max="10"
-              step="0.5"
-              value={effects.blur}
-              onChange={(e) =>
-                setEffects({ ...effects, blur: parseFloat(e.target.value) })
-              }
-            />
-          </div>
-        </div>
-
-        <button onClick={addTextOverlay} className={styles.actionButton}>
-          Add Text
-        </button>
-
-        <div className={styles.textOverlays}>
-          {textOverlays.map((overlay) => (
-            <div key={overlay.id} className={styles.textOverlay}>
-              <input
-                type="text"
-                className={styles.textInput}
-                value={overlay.text}
-                onChange={(e) => handleTextEdit(overlay.id, e.target.value)}
-                onMouseDown={(e) => handleMouseDown(e, overlay.id)}
-                placeholder="Enter text..."
-              />
-
-              <input
-                type="color"
-                className={styles.colorInput}
-                value={overlay.color}
-                onChange={(e) => handleColorChange(overlay.id, e.target.value)}
-                title="Text color"
-              />
-
-              <div className={styles.timeControl}>
-                <label className={styles.label}>Start:</label>
-                <input
-                  type="number"
-                  className={styles.timeInput}
-                  min="0"
-                  step="0.1"
-                  value={overlay.timestamp}
-                  onChange={(e) =>
-                    setTextOverlays((overlays) =>
-                      overlays.map((o) =>
-                        o.id === overlay.id
-                          ? { ...o, timestamp: parseFloat(e.target.value) }
-                          : o
-                      )
-                    )
-                  }
+    <div className={styles.container}>
+      {videoUrl ? (
+        <div className={styles.videoContainer}>
+          
+          <div className={styles.editor}>
+            <div className={styles.preview}>
+              <div>
+                <h3>Original Video</h3>
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  onTimeUpdate={() => setIsVideoLoaded(true)}
+                  controls
+                  className={styles.videoElement}
                 />
               </div>
-
-              <div className={styles.timeControl}>
-                <label className={styles.label}>Duration:</label>
-                <input
-                  type="number"
-                  className={styles.timeInput}
-                  min="0.1"
-                  step="0.1"
-                  value={overlay.duration}
-                  onChange={(e) =>
-                    setTextOverlays((overlays) =>
-                      overlays.map((o) =>
-                        o.id === overlay.id
-                          ? { ...o, duration: parseFloat(e.target.value) }
-                          : o
-                      )
-                    )
-                  }
+              <div>
+                <h3>Preview with Effects</h3>
+                <canvas
+                  ref={canvasRef}
+                  className={styles.previewCanvas}
+                  width={600}
+                  height={337.5}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
                 />
               </div>
             </div>
-          ))}
-        </div>
 
-        <button
-          onClick={exportVideo}
-          disabled={isExporting}
-          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2
-            ${
-              isExporting
-                ? "bg-gray-500 cursor-not-allowed"
-                : "bg-green-500 hover:bg-green-600"
-            }`}
-        >
-          {isExporting ? (
-            <>
-              <svg
-                className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
+            <div className={styles.controls}>
+              <div className={styles.effectControls}>
+                <div>
+                  <label>Fade:</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={effects.fade}
+                    onChange={(e) =>
+                      setEffects({
+                        ...effects,
+                        fade: parseFloat(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label>Brightness:</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={effects.brightness}
+                    onChange={(e) =>
+                      setEffects({
+                        ...effects,
+                        brightness: parseFloat(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label>Blur:</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    value={effects.blur}
+                    onChange={(e) =>
+                      setEffects({
+                        ...effects,
+                        blur: parseFloat(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <button onClick={addTextOverlay} className={styles.actionButton}>
+                Add Text
+              </button>
+
+              <div className={styles.textOverlays}>
+                {textOverlays.map((overlay) => (
+                  <div key={overlay.id} className={styles.textOverlay}>
+                    <input
+                      type="text"
+                      className={styles.textInput}
+                      value={overlay.text}
+                      onChange={(e) =>
+                        handleTextEdit(overlay.id, e.target.value)
+                      }
+                      onMouseDown={(e) => handleMouseDown(e, overlay.id)}
+                      placeholder="Enter text..."
+                    />
+
+                    <input
+                      type="color"
+                      className={styles.colorInput}
+                      value={overlay.color}
+                      onChange={(e) =>
+                        handleColorChange(overlay.id, e.target.value)
+                      }
+                      title="Text color"
+                    />
+
+                    <div className={styles.timeControl}>
+                      <label className={styles.label}>Start:</label>
+                      <input
+                        type="number"
+                        className={styles.timeInput}
+                        min="0"
+                        step="0.1"
+                        value={overlay.timestamp}
+                        onChange={(e) =>
+                          setTextOverlays((overlays) =>
+                            overlays.map((o) =>
+                              o.id === overlay.id
+                                ? {
+                                    ...o,
+                                    timestamp: parseFloat(e.target.value),
+                                  }
+                                : o
+                            )
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.timeControl}>
+                      <label className={styles.label}>Duration:</label>
+                      <input
+                        type="number"
+                        className={styles.timeInput}
+                        min="0.1"
+                        step="0.1"
+                        value={overlay.duration}
+                        onChange={(e) =>
+                          setTextOverlays((overlays) =>
+                            overlays.map((o) =>
+                              o.id === overlay.id
+                                ? { ...o, duration: parseFloat(e.target.value) }
+                                : o
+                            )
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={exportVideo}
+                disabled={isExporting}
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2
+                  ${
+                    isExporting
+                      ? "bg-gray-500 cursor-not-allowed"
+                      : "bg-green-500 hover:bg-green-600"
+                  }`}
               >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              {exportStatus || "Exporting..."}{" "}
-              {exportProgress > 0 && `(${exportProgress}%)`}
-            </>
-          ) : (
-            "Export Video"
-          )}
-        </button>
-      </div>
+                {isExporting ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    {exportStatus || "Exporting..."}{" "}
+                    {exportProgress > 0 && `(${exportProgress}%)`}
+                  </>
+                ) : (
+                  "Export Video"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.error}>No video URL provided</div>
+      )}
     </div>
   );
 }
