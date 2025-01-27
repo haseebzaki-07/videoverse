@@ -1,12 +1,67 @@
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { statSync, existsSync, readFileSync } from "fs";
+import fs from "fs";
+import {
+  statSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+} from "fs";
 import path from "path";
-
 import logger from "@/utils/logger";
 
 const execAsync = promisify(exec);
+
+// Helper function to generate file list
+const generateFileList = async () => {
+  try {
+    const videosDir = path.join(process.cwd(), "public", "videos");
+    const outputDir = path.join(process.cwd(), "public", "output");
+    const fileListPath = path.join(outputDir, "file-list.txt");
+
+    // Create output directory if it doesn't exist
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Get all video files and sort them numerically
+    const videoFiles = existsSync(videosDir)
+      ? fs
+          .readdirSync(videosDir)
+          .filter((file) => file.startsWith("video_") && file.endsWith(".mp4"))
+          .sort((a, b) => {
+            const numA = parseInt(a.match(/\d+/)?.[0] || "0");
+            const numB = parseInt(b.match(/\d+/)?.[0] || "0");
+            return numA - numB;
+          })
+      : [];
+
+    if (videoFiles.length === 0) {
+      throw new Error("No video files found in videos directory");
+    }
+
+    // Generate file list content
+    const fileListContent = videoFiles
+      .map((file) => `file '${path.join(videosDir, file)}'`)
+      .join("\n");
+
+    // Write file list
+    writeFileSync(fileListPath, fileListContent);
+    logger.info("Generated file list", {
+      fileListPath,
+      videoCount: videoFiles.length,
+    });
+
+    return fileListPath;
+  } catch (error) {
+    logger.error("Error generating file list", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw error;
+  }
+};
 
 // Helper function to check if video is ready
 const checkVideoReady = async (filePath: string): Promise<boolean> => {
@@ -62,12 +117,9 @@ const checkVideoReady = async (filePath: string): Promise<boolean> => {
 
 export async function GET() {
   try {
-    const fileListPath = path.join(
-      process.cwd(),
-      "public",
-      "output",
-      "file-list.txt"
-    );
+    // Generate file list first
+    const fileListPath = await generateFileList();
+
     const audioPath = path.join(
       process.cwd(),
       "public",

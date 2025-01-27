@@ -18,12 +18,14 @@ interface PexelsVideoFile {
   quality: string;
   width: number;
   height: number;
+  duration: number;
 }
 
 interface PexelsVideo {
   video_files: PexelsVideoFile[];
   width: number;
   height: number;
+  duration: number;
 }
 
 interface PexelsResponse {
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest) {
 
     const videoPaths: string[] = [];
     const TOTAL_CLIPS = 5;
+    const MAX_DURATION = 20; // Maximum duration in seconds
 
     // Basic validation
     if (!topic) {
@@ -59,15 +62,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Make a request to the Pexels API to search for videos
-    // Request more videos than needed to account for filtering
     const response = await axios.get<PexelsResponse>(
       `https://api.pexels.com/videos/search`,
       {
         headers: { Authorization: pexelsApiKey },
         params: {
           query: `${topic} ${style}`.trim(),
-          per_page: TOTAL_CLIPS * 3, // Request more videos to filter
-          orientation: "portrait", // Request only portrait videos
+          per_page: TOTAL_CLIPS * 5, // Request more videos to account for filtering
+          orientation: "portrait",
+          size: "small", // This helps get shorter videos
         },
       }
     );
@@ -83,18 +86,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Filter for portrait videos (height > width)
-    const portraitVideos = response.data.videos.filter(
-      (video) => video.height > video.width
+    // Filter for portrait videos with duration less than MAX_DURATION seconds
+    const filteredVideos = response.data.videos.filter(
+      (video) => video.height > video.width && video.duration <= MAX_DURATION
     );
 
-    logger.debug("Filtered portrait videos", {
+    logger.debug("Filtered videos", {
       totalVideos: response.data.videos.length,
-      portraitVideos: portraitVideos.length,
+      filteredVideos: filteredVideos.length,
+      maxDuration: MAX_DURATION,
     });
 
     // Process each video sequentially
-    for (let i = 0; i < Math.min(TOTAL_CLIPS, portraitVideos.length); i++) {
+    for (let i = 0; i < Math.min(TOTAL_CLIPS, filteredVideos.length); i++) {
       const videoFileName = `video_${i + 1}.mp4`;
       const tempPath = path.join(videosDir, `temp_${videoFileName}`);
       const finalPath = path.join(videosDir, videoFileName);
@@ -103,24 +107,29 @@ export async function POST(req: NextRequest) {
         index: i + 1,
         tempPath,
         finalPath,
+        duration: filteredVideos[i].duration,
       });
 
       try {
-        const video = portraitVideos[i];
+        const video = filteredVideos[i];
         if (!video.video_files || video.video_files.length === 0) {
           logger.warn(`No video files found for index ${i + 1}, skipping`);
           continue;
         }
 
-        // Find the best quality portrait video file
+        // Find the best quality portrait video file under MAX_DURATION
         const portraitFile =
           video.video_files.find(
-            (file) => file.height > file.width && file.quality === "hd"
+            (file) =>
+              file.height > file.width &&
+              file.quality === "hd" &&
+              file.duration <= MAX_DURATION
           ) || video.video_files[0];
 
         logger.debug(`Downloading video ${i + 1}`, {
           url: portraitFile.link,
           dimensions: `${portraitFile.width}x${portraitFile.height}`,
+          duration: portraitFile.duration,
         });
 
         const videoResponse = await axios({
