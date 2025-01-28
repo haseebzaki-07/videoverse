@@ -17,6 +17,8 @@ interface VideoClip {
   fileName: string;
   startTime?: number;
   duration?: number;
+  trimStart?: number;
+  trimEnd?: number;
   effects?: VideoEffect[];
 }
 
@@ -153,34 +155,114 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Calculate total video duration from clips
+    let totalVideoDuration = 0;
+    const clipInfos = await Promise.all(
+      body.clips.map(async (clip) => {
+        const videoPath = path.join(videosDir, clip.fileName);
+        // Get video duration using ffprobe
+        const { stdout } = await execAsync(
+          `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`
+        );
+        const sourceDuration = parseFloat(stdout);
+        const clipDuration = clip.duration || sourceDuration;
+        totalVideoDuration += clipDuration;
+        return {
+          ...clip,
+          sourceDuration,
+          actualDuration: clipDuration,
+        };
+      })
+    );
+
+    // Get audio duration
+    let audioDuration = 0;
+    if (fs.existsSync(audioPath)) {
+      const { stdout } = await execAsync(
+        `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`
+      );
+      audioDuration = parseFloat(stdout);
+    }
+
+    // Determine final video duration (use shorter of video or audio)
+    const targetDuration = Math.min(totalVideoDuration, audioDuration);
+
+    // Adjust clip durations proportionally if needed
+    const durationScale = targetDuration / totalVideoDuration;
+    const adjustedClips = clipInfos.map((clip) => ({
+      ...clip,
+      actualDuration: clip.actualDuration * durationScale,
+    }));
+
     const builder = new FFmpegCommandBuilder(outputPath);
     const streamIndexes: number[] = [];
 
-    // Add video inputs
-    for (const clip of body.clips) {
+    // Add video inputs with trim filters
+    let currentTime = 0;
+    const clipFilters: string[] = [];
+
+    for (const [index, clip] of adjustedClips.entries()) {
       const videoPath = path.join(videosDir, clip.fileName);
       const streamIndex = builder.addInput(videoPath);
       streamIndexes.push(streamIndex);
+
+      // Create trim filter for each clip
+      const trimFilter = `[${streamIndex}:v]trim=duration=${clip.actualDuration},setpts=PTS-STARTPTS[clip${index}];`;
+      clipFilters.push(trimFilter);
     }
 
-    // Add audio input if exists
+    // Add audio input
     const hasAudio = fs.existsSync(audioPath);
+    let audioStreamIndex = -1;
     if (hasAudio) {
-      builder.addInput(audioPath);
+      audioStreamIndex = builder.addInput(audioPath);
     }
 
     // Build complex filter graph
     let filterGraph = "";
 
-    // 1. Handle video concatenation
-    if (body.clips.length === 1) {
-      filterGraph += `[0:v]copy[outv];`;
-    } else if (body.clips.length > 1) {
-      const concatParts = streamIndexes.map((i) => `[${i}:v]`).join("");
-      filterGraph += `${concatParts}concat=n=${body.clips.length}:v=1:a=0[outv];`;
+    // 1. First normalize frame rates and trim clips
+    for (const [index, clip] of adjustedClips.entries()) {
+      // Add fps filter to ensure constant frame rate before trim
+      filterGraph += `[${index}:v]fps=24,trim=duration=${clip.actualDuration},setpts=PTS-STARTPTS[clip${index}];`;
     }
 
-    // 2. Apply effects in sequence
+    // 2. Add transitions between clips using concat with crossfade
+    if (body.effects?.transition) {
+      const transitionDuration = body.effects.transition.duration || 1;
+
+      // Create a temporary clip for each video that includes the fade effect
+      for (let i = 0; i < adjustedClips.length; i++) {
+        const duration = adjustedClips[i].actualDuration;
+
+        if (i === 0) {
+          // First clip only needs fade out
+          filterGraph += `[clip${i}]fade=t=out:st=${
+            duration - transitionDuration
+          }:d=${transitionDuration}[fadedclip${i}];`;
+        } else if (i === adjustedClips.length - 1) {
+          // Last clip only needs fade in
+          filterGraph += `[clip${i}]fade=t=in:st=0:d=${transitionDuration}[fadedclip${i}];`;
+        } else {
+          // Middle clips need both fade in and fade out
+          filterGraph += `[clip${i}]fade=t=in:st=0:d=${transitionDuration},fade=t=out:st=${
+            duration - transitionDuration
+          }:d=${transitionDuration}[fadedclip${i}];`;
+        }
+      }
+
+      // Concatenate all faded clips
+      const concatInputs = adjustedClips
+        .map((_, i) => `[fadedclip${i}]`)
+        .join("");
+      filterGraph += `${concatInputs}concat=n=${adjustedClips.length}:v=1:a=0[mainv];`;
+    } else {
+      // Simple concatenation without transitions
+      const concatInputs = adjustedClips.map((_, i) => `[clip${i}]`).join("");
+      filterGraph += `${concatInputs}concat=n=${adjustedClips.length}:v=1:a=0[mainv];`;
+    }
+
+    // 3. Apply other effects starting from mainv
     if (body.effects) {
       // Color adjustments
       if (body.effects.colorAdjustment) {
@@ -189,79 +271,80 @@ export async function POST(req: NextRequest) {
           contrast = 1,
           saturation = 1,
         } = body.effects.colorAdjustment;
-        filterGraph += `[outv]eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}[outv];`;
+        filterGraph += `[mainv]eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}[colorv];`;
+      } else {
+        filterGraph += `[mainv]copy[colorv];`;
       }
 
-      // Text overlays with proper positioning
-      if (body.effects.text) {
+      // Text overlays
+      let lastLabel = "colorv";
+      if (body.effects.text && body.effects.text.length > 0) {
         body.effects.text.forEach((text, index) => {
-          const position = builder.getTextPosition(text.position);
-          const fontPath = "C\\:/Windows/Fonts/arial.ttf"; // Escape Windows path properly
+          const startTime = text.startTime || 0;
+          const duration = text.duration || 0;
+          const nextLabel =
+            index === body.effects.text.length - 1 ? "textv" : `text${index}`;
+
+          // Get text position
+          let position = "";
+          switch (text.position) {
+            case "center,center-100":
+              position = "x=(w-text_w)/2:y=(h-text_h)/2-100";
+              break;
+            case "center,center+100":
+              position = "x=(w-text_w)/2:y=(h-text_h)/2+100";
+              break;
+            case "center,center":
+            default:
+              position = "x=(w-text_w)/2:y=(h-text_h)/2";
+              break;
+          }
 
           filterGraph +=
-            `[outv]drawtext=text='${text.content}':` +
+            `[${lastLabel}]drawtext=text='${text.content}':` +
             `fontsize=${text.fontSize}:` +
             `fontcolor=${text.color}:` +
             `${position}:` +
-            `fontfile='${fontPath}'` +
-            (text.startTime !== undefined
-              ? `:enable='between(t,${text.startTime},${
-                  text.startTime + (text.duration || 0)
-                })'`
-              : "") +
-            `[outv];`;
-        });
-      }
+            `fontfile='C\\:/Windows/Fonts/arial.ttf':` +
+            `enable='between(t,${startTime},${startTime + duration})'` +
+            `[${nextLabel}];`;
 
-      // Image overlay
-      if (body.effects.overlay) {
-        const overlayPath = path.join(
-          process.cwd(),
-          "public",
-          body.effects.overlay.image
-        );
-        if (fs.existsSync(overlayPath)) {
-          const overlayIndex = builder.addInput(overlayPath);
-          const position = body.effects.overlay.position.replace(",", ":");
-          filterGraph +=
-            `[outv][${overlayIndex}:v]overlay=${position}` +
-            (body.effects.overlay.opacity
-              ? `:alpha=${body.effects.overlay.opacity}`
-              : "") +
-            `[outv];`;
-        }
+          lastLabel = nextLabel;
+        });
+      } else {
+        filterGraph += `[colorv]copy[textv];`;
       }
 
       // Speed adjustment
       if (body.effects.speed) {
         const pts = 1 / body.effects.speed;
-        filterGraph += `[outv]setpts=${pts}*PTS[outv];`;
+        filterGraph += `[textv]setpts=${pts}*PTS[speedv];`;
+      } else {
+        filterGraph += `[textv]copy[speedv];`;
       }
 
-      // Transitions
-      if (body.effects.transition && body.clips.length > 1) {
-        const duration = body.effects.transition.duration || 1;
-        switch (body.effects.transition.type) {
-          case "fade":
-            filterGraph += `[outv]fade=t=in:st=0:d=${duration},fade=t=out:st=${
-              body.clips.length * 5 - duration
-            }:d=${duration}[outv];`;
-            break;
-          case "crossfade":
-            // Add crossfade logic here
-            break;
-        }
-      }
+      // Final format conversion
+      filterGraph += `[speedv]format=yuv420p[finalv]`;
+    } else {
+      // If no effects, just convert format
+      filterGraph += `[mainv]format=yuv420p[finalv]`;
     }
 
-    // Final format conversion
-    filterGraph += `[outv]format=yuv420p[finalv]`;
     builder.addFilter(filterGraph);
 
     // Add output options
     builder.addOutputOption('-map "[finalv]"');
+
+    // Handle audio
     if (hasAudio) {
-      const audioStreamIndex = body.clips.length;
+      if (body.audio) {
+        const { volume = 1, fadeIn = 0, fadeOut = 0 } = body.audio;
+        builder.addOutputOption(
+          `-af "afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${
+            targetDuration - fadeOut
+          }:d=${fadeOut},volume=${volume}"`
+        );
+      }
       builder.addOutputOption(`-map ${audioStreamIndex}:a`);
     }
 
@@ -273,9 +356,8 @@ export async function POST(req: NextRequest) {
     if (body.output.resolution) {
       builder.addOutputOption(`-s ${body.output.resolution}`);
     }
-    if (body.output.fps) {
-      builder.addOutputOption(`-r ${body.output.fps}`);
-    }
+    builder.addOutputOption(`-r 24`); // Force constant output frame rate
+    builder.addOutputOption(`-t ${targetDuration}`);
 
     const ffmpegCommand = builder.build();
     logger.debug("Generated FFmpeg command", { command: ffmpegCommand });
