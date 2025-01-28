@@ -1,0 +1,40 @@
+{
+  "info": {
+    "name": "VideoEditor API Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Analyze and Edit Video",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": {
+            "prompt": "Create a dynamic promotional video with energetic transitions. Add text overlays that say 'Innovation Unleashed' at the start and 'Transform Your Ideas' in the middle. Make it vibrant and modern with a slight warm color tone.",
+            "videoFiles": [
+              "video_1.mp4",
+              "video_2.mp4",
+              "video_3.mp4",
+              "video_4.mp4",
+              "video_5.mp4"
+            ]
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/analyzeEdit",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "analyzeEdit"]
+        }
+      }
+    }
+  ]
+} 
