@@ -21,6 +21,7 @@
 /public/generated_speech.mp3
 /public/videos/*
 /public/output/final_video.mp4
+/public/output/edited_video.mp4
 /public/output/file-list.txt
 
 # Keep the directories but ignore contents
