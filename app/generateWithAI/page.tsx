@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Maximize2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import VideoPreviewModal from "@/components/VideoPreviewModal";
 
 interface VideoFile {
   name: string;
@@ -83,6 +84,7 @@ export default function GenerateWithAI() {
   const [editMode, setEditMode] = useState<"prompt" | "custom">("prompt");
   const [error, setError] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState<string>("");
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Fetch available videos on component mount
   useEffect(() => {
@@ -196,449 +198,466 @@ export default function GenerateWithAI() {
   };
 
   return (
-    <div className="min-h-screen bg-[#121212] text-white ml-[250px]">
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center space-y-4 mb-12">
-          <h1 className="text-4xl font-bold text-white leading-tight mt-2">
+    <div className="min-h-screen  text-white ml-[250px]">
+      {/* Fixed Header */}
+      <div className="fixed top-0 right-0 left-[250px]  z-30 border-b border-gray-800">
+        <div className="container mx-auto px-4 py-6 flex justify-between items-center">
+          <h1 className="text-4xl font-bold text-white leading-tight">
             Edit with
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
               {" "}
               AI
             </span>
           </h1>
-        </div>
 
+          <button
+            onClick={() => {
+              const previousVideoUrl = "/output/edited_video.mp4";
+              setEditedVideoUrl(previousVideoUrl);
+              setShowPreviewModal(true);
+            }}
+            className="px-6 py-2 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-medium flex items-center gap-2 transition-all duration-200"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Previous Edit
+          </button>
+        </div>
+      </div>
+
+      {/* Fixed Mode Selection */}
+      <div className="fixed top-[88px] right-0 left-[250px]  z-20 border-b border-gray-800">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setEditMode("prompt")}
+              className={`flex-1 py-2 px-4 rounded-lg ${
+                editMode === "prompt"
+                  ? "bg-purple-500 text-white"
+                  : "bg-gray-800 text-gray-300"
+              }`}
+            >
+              Generate with Prompt
+            </button>
+            <button
+              onClick={() => setEditMode("custom")}
+              className={`flex-1 py-2 px-4 rounded-lg ${
+                editMode === "custom"
+                  ? "bg-purple-500 text-white"
+                  : "bg-gray-800 text-gray-300"
+              }`}
+            >
+              Custom Settings
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content - Scrollable */}
+      <div className="pt-[160px] container mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Side - Video Selection */}
           <div className="space-y-4">
-            <h2 className="text-2xl font-semibold mb-4">Available Videos</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <h2 className="text-2xl font-semibold mb-4 mt-2">Available Videos</h2>
+            <div className="grid grid-cols-3 gap-3 max-h-[500px] overflow-y-auto pr-2">
               {videos.map((video) => (
                 <div
                   key={video.name}
-                  className={`p-4 cursor-pointer transition-all rounded-lg border ${
+                  className={`p-2 cursor-pointer transition-all rounded-lg border ${
                     selectedVideos.includes(video.name)
                       ? "border-2 border-purple-500"
                       : "border-gray-700"
                   }`}
                   onClick={() => handleVideoSelect(video.name)}
                 >
-                  <div className="aspect-[9/16] bg-gray-800 mb-2 rounded-lg overflow-hidden">
+                  <div className="aspect-[9/16] bg-gray-800 rounded-lg overflow-hidden">
                     <video
                       src={video.path}
                       className="w-full h-full object-cover"
                       controls
                     />
                   </div>
-                  <p className="text-sm text-center">{video.name}</p>
+                  <p className="text-xs text-center mt-1">{video.name}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Right Side - Settings */}
-          <div className="space-y-6 overflow-y-auto max-h-[90vh] p-4">
-            <div className="space-y-6">
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => setEditMode("prompt")}
-                  className={`flex-1 py-2 px-4 rounded-lg ${
-                    editMode === "prompt"
-                      ? "bg-purple-500 text-white"
-                      : "bg-gray-800 text-gray-300"
-                  }`}
-                >
-                  Generate with Prompt
-                </button>
-                <button
-                  onClick={() => setEditMode("custom")}
-                  className={`flex-1 py-2 px-4 rounded-lg ${
-                    editMode === "custom"
-                      ? "bg-purple-500 text-white"
-                      : "bg-gray-800 text-gray-300"
-                  }`}
-                >
-                  Custom Settings
-                </button>
+          <div className="space-y-6  overflow-y-auto max-h-[calc(100vh-180px)]">
+            {editMode === "prompt" ? (
+              <div className="space-y-4 mt-2">
+                <h3 className="text-xl font-semibold">Enter Prompt</h3>
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Describe how you want your video to look..."
+                  className="w-full h-32 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white"
+                />
               </div>
-
-              {editMode === "prompt" ? (
-                <div className="space-y-4">
-                  <h3 className="text-xl font-semibold">Enter Prompt</h3>
-                  <textarea
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="Describe how you want your video to look..."
-                    className="w-full h-32 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Audio Settings */}
-                  <div className="bg-gray-800/50 p-4 rounded-lg space-y-4">
-                    <h3 className="text-xl font-semibold">Audio Settings</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm mb-1">Volume</label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={formData.audio.volume}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "audio",
-                              "volume",
-                              parseFloat(e.target.value)
-                            )
-                          }
-                          className="w-full"
-                        />
-                        <span className="text-xs">{formData.audio.volume}</span>
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">
-                          Fade In (s)
-                        </label>
-                        <input
-                          type="number"
-                          value={formData.audio.fadeIn}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "audio",
-                              "fadeIn",
-                              parseFloat(e.target.value)
-                            )
-                          }
-                          className="w-full bg-gray-700 rounded p-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">
-                          Fade Out (s)
-                        </label>
-                        <input
-                          type="number"
-                          value={formData.audio.fadeOut}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "audio",
-                              "fadeOut",
-                              parseFloat(e.target.value)
-                            )
-                          }
-                          className="w-full bg-gray-700 rounded p-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">Bass</label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="5"
-                          step="0.1"
-                          value={formData.audio.bass}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "audio",
-                              "bass",
-                              parseFloat(e.target.value)
-                            )
-                          }
-                          className="w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">Treble</label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="5"
-                          step="0.1"
-                          value={formData.audio.treble}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "audio",
-                              "treble",
-                              parseFloat(e.target.value)
-                            )
-                          }
-                          className="w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">Normalize</label>
-                        <input
-                          type="checkbox"
-                          checked={formData.audio.normalize}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "audio",
-                              "normalize",
-                              e.target.checked
-                            )
-                          }
-                          className="w-4 h-4"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Output Settings */}
-                  <div className="bg-gray-800/50 p-4 rounded-lg space-y-4">
-                    <h3 className="text-xl font-semibold">Output Settings</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm mb-1">Format</label>
-                        <select
-                          value={formData.output.format}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "output",
-                              "format",
-                              e.target.value
-                            )
-                          }
-                          className="w-full bg-gray-700 rounded p-2"
-                        >
-                          <option value="mp4">MP4</option>
-                          <option value="mov">MOV</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">Resolution</label>
-                        <select
-                          value={formData.output.resolution}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "output",
-                              "resolution",
-                              e.target.value
-                            )
-                          }
-                          className="w-full bg-gray-700 rounded p-2"
-                        >
-                          <option value="1080x1920">1080x1920</option>
-                          <option value="720x1280">720x1280</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">FPS</label>
-                        <input
-                          type="number"
-                          value={formData.output.fps}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "output",
-                              "fps",
-                              parseInt(e.target.value)
-                            )
-                          }
-                          className="w-full bg-gray-700 rounded p-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">Quality</label>
-                        <select
-                          value={formData.output.quality}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "output",
-                              "quality",
-                              e.target.value
-                            )
-                          }
-                          className="w-full bg-gray-700 rounded p-2"
-                        >
-                          <option value="high">High</option>
-                          <option value="medium">Medium</option>
-                          <option value="low">Low</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Effects Settings */}
-                  <div className="bg-gray-800/50 p-4 rounded-lg space-y-4">
-                    <h3 className="text-xl font-semibold">Effects</h3>
-
-                    {/* Transition */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium">Transition</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm mb-1">Type</label>
-                          <select
-                            value={formData.effects.transition.type}
-                            onChange={(e) =>
-                              handleInputChange("effects", "transition", {
-                                ...formData.effects.transition,
-                                type: e.target.value,
-                              })
-                            }
-                            className="w-full bg-gray-700 rounded p-2"
-                          >
-                            <option value="fade">Fade</option>
-                            <option value="crossfade">Crossfade</option>
-                            <option value="wipe">Wipe</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm mb-1">Duration</label>
-                          <input
-                            type="number"
-                            value={formData.effects.transition.duration}
-                            onChange={(e) =>
-                              handleInputChange("effects", "transition", {
-                                ...formData.effects.transition,
-                                duration: parseFloat(e.target.value),
-                              })
-                            }
-                            className="w-full bg-gray-700 rounded p-2"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Text Overlay */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium">Text Overlay</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2">
-                          <label className="block text-sm mb-1">Content</label>
-                          <input
-                            type="text"
-                            value={formData.effects.text.content}
-                            onChange={(e) =>
-                              handleInputChange("effects", "text", {
-                                ...formData.effects.text,
-                                content: e.target.value,
-                              })
-                            }
-                            className="w-full bg-gray-700 rounded p-2"
-                          />
-                        </div>
-                        {/* Add other text overlay inputs */}
-                      </div>
-                    </div>
-
-                    {/* Color Adjustment */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium">Color Adjustment</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        {Object.entries(formData.effects.colorAdjustment).map(
-                          ([key, value]) => (
-                            <div key={key}>
-                              <label className="block text-sm mb-1 capitalize">
-                                {key}
-                              </label>
-                              <input
-                                type="range"
-                                min={key === "brightness" ? -1 : 0}
-                                max={key === "brightness" ? 1 : 2}
-                                step="0.05"
-                                value={value}
-                                onChange={(e) =>
-                                  handleInputChange(
-                                    "effects",
-                                    "colorAdjustment",
-                                    {
-                                      ...formData.effects.colorAdjustment,
-                                      [key]: parseFloat(e.target.value),
-                                    }
-                                  )
-                                }
-                                className="w-full"
-                              />
-                              <span className="text-xs">{value}</span>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Vignette */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium">Vignette</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm mb-1">Angle</label>
-                          <input
-                            type="number"
-                            value={formData.effects.vignette.angle}
-                            onChange={(e) =>
-                              handleInputChange("effects", "vignette", {
-                                ...formData.effects.vignette,
-                                angle: parseInt(e.target.value),
-                              })
-                            }
-                            className="w-full bg-gray-700 rounded p-2"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm mb-1">Strength</label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.1"
-                            value={formData.effects.vignette.strength}
-                            onChange={(e) =>
-                              handleInputChange("effects", "vignette", {
-                                ...formData.effects.vignette,
-                                strength: parseFloat(e.target.value),
-                              })
-                            }
-                            className="w-full"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Speed */}
+            ) : (
+              <div className="space-y-6">
+                {/* Audio Settings */}
+                <div className="bg-gray-800/50 p-4 rounded-lg space-y-4">
+                  <h3 className="text-xl font-semibold">Audio Settings</h3>
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm mb-1">Speed</label>
+                      <label className="block text-sm mb-1">Volume</label>
                       <input
                         type="range"
-                        min="0.5"
-                        max="2"
+                        min="0"
+                        max="1"
                         step="0.1"
-                        value={formData.effects.speed}
+                        value={formData.audio.volume}
                         onChange={(e) =>
                           handleInputChange(
-                            "effects",
-                            "speed",
+                            "audio",
+                            "volume",
                             parseFloat(e.target.value)
                           )
                         }
                         className="w-full"
                       />
-                      <span className="text-xs">{formData.effects.speed}x</span>
+                      <span className="text-xs">{formData.audio.volume}</span>
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Fade In (s)</label>
+                      <input
+                        type="number"
+                        value={formData.audio.fadeIn}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "audio",
+                            "fadeIn",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        className="w-full bg-gray-700 rounded p-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Fade Out (s)</label>
+                      <input
+                        type="number"
+                        value={formData.audio.fadeOut}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "audio",
+                            "fadeOut",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        className="w-full bg-gray-700 rounded p-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Bass</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.1"
+                        value={formData.audio.bass}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "audio",
+                            "bass",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Treble</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.1"
+                        value={formData.audio.treble}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "audio",
+                            "treble",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Normalize</label>
+                      <input
+                        type="checkbox"
+                        checked={formData.audio.normalize}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "audio",
+                            "normalize",
+                            e.target.checked
+                          )
+                        }
+                        className="w-4 h-4"
+                      />
                     </div>
                   </div>
                 </div>
-              )}
 
-              <button
-                onClick={handleEditWithAI}
-                disabled={
-                  isLoading ||
-                  (!prompt && editMode === "prompt") ||
-                  selectedVideos.length === 0
-                }
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-3 rounded-lg font-semibold disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <span className="flex items-center justify-center">
-                    <Loader2 className="animate-spin mr-2" />
-                    Processing...
-                  </span>
-                ) : (
-                  "Generate Video"
-                )}
-              </button>
-            </div>
+                {/* Output Settings */}
+                <div className="bg-gray-800/50 p-4 rounded-lg space-y-4">
+                  <h3 className="text-xl font-semibold">Output Settings</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm mb-1">Format</label>
+                      <select
+                        value={formData.output.format}
+                        onChange={(e) =>
+                          handleInputChange("output", "format", e.target.value)
+                        }
+                        className="w-full bg-gray-700 rounded p-2"
+                      >
+                        <option value="mp4">MP4</option>
+                        <option value="mov">MOV</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Resolution</label>
+                      <select
+                        value={formData.output.resolution}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "output",
+                            "resolution",
+                            e.target.value
+                          )
+                        }
+                        className="w-full bg-gray-700 rounded p-2"
+                      >
+                        <option value="1080x1920">1080x1920</option>
+                        <option value="720x1280">720x1280</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">FPS</label>
+                      <input
+                        type="number"
+                        value={formData.output.fps}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "output",
+                            "fps",
+                            parseInt(e.target.value)
+                          )
+                        }
+                        className="w-full bg-gray-700 rounded p-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Quality</label>
+                      <select
+                        value={formData.output.quality}
+                        onChange={(e) =>
+                          handleInputChange("output", "quality", e.target.value)
+                        }
+                        className="w-full bg-gray-700 rounded p-2"
+                      >
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Effects Settings */}
+                <div className="bg-gray-800/50 p-4 rounded-lg space-y-4">
+                  <h3 className="text-xl font-semibold">Effects</h3>
+
+                  {/* Transition */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Transition</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm mb-1">Type</label>
+                        <select
+                          value={formData.effects.transition.type}
+                          onChange={(e) =>
+                            handleInputChange("effects", "transition", {
+                              ...formData.effects.transition,
+                              type: e.target.value,
+                            })
+                          }
+                          className="w-full bg-gray-700 rounded p-2"
+                        >
+                          <option value="fade">Fade</option>
+                          <option value="crossfade">Crossfade</option>
+                          <option value="wipe">Wipe</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-1">Duration</label>
+                        <input
+                          type="number"
+                          value={formData.effects.transition.duration}
+                          onChange={(e) =>
+                            handleInputChange("effects", "transition", {
+                              ...formData.effects.transition,
+                              duration: parseFloat(e.target.value),
+                            })
+                          }
+                          className="w-full bg-gray-700 rounded p-2"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Text Overlay */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Text Overlay</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2">
+                        <label className="block text-sm mb-1">Content</label>
+                        <input
+                          type="text"
+                          value={formData.effects.text.content}
+                          onChange={(e) =>
+                            handleInputChange("effects", "text", {
+                              ...formData.effects.text,
+                              content: e.target.value,
+                            })
+                          }
+                          className="w-full bg-gray-700 rounded p-2"
+                        />
+                      </div>
+                      {/* Add other text overlay inputs */}
+                    </div>
+                  </div>
+
+                  {/* Color Adjustment */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Color Adjustment</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {Object.entries(formData.effects.colorAdjustment).map(
+                        ([key, value]) => (
+                          <div key={key}>
+                            <label className="block text-sm mb-1 capitalize">
+                              {key}
+                            </label>
+                            <input
+                              type="range"
+                              min={key === "brightness" ? -1 : 0}
+                              max={key === "brightness" ? 1 : 2}
+                              step="0.05"
+                              value={value}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  "effects",
+                                  "colorAdjustment",
+                                  {
+                                    ...formData.effects.colorAdjustment,
+                                    [key]: parseFloat(e.target.value),
+                                  }
+                                )
+                              }
+                              className="w-full"
+                            />
+                            <span className="text-xs">{value}</span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Vignette */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Vignette</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm mb-1">Angle</label>
+                        <input
+                          type="number"
+                          value={formData.effects.vignette.angle}
+                          onChange={(e) =>
+                            handleInputChange("effects", "vignette", {
+                              ...formData.effects.vignette,
+                              angle: parseInt(e.target.value),
+                            })
+                          }
+                          className="w-full bg-gray-700 rounded p-2"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-1">Strength</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={formData.effects.vignette.strength}
+                          onChange={(e) =>
+                            handleInputChange("effects", "vignette", {
+                              ...formData.effects.vignette,
+                              strength: parseFloat(e.target.value),
+                            })
+                          }
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Speed */}
+                  <div>
+                    <label className="block text-sm mb-1">Speed</label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={formData.effects.speed}
+                      onChange={(e) =>
+                        handleInputChange(
+                          "effects",
+                          "speed",
+                          parseFloat(e.target.value)
+                        )
+                      }
+                      className="w-full"
+                    />
+                    <span className="text-xs">{formData.effects.speed}x</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Generate Button */}
+            <button
+              onClick={handleEditWithAI}
+              disabled={
+                isLoading ||
+                (!prompt && editMode === "prompt") ||
+                selectedVideos.length === 0
+              }
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-3 rounded-lg font-semibold disabled:opacity-50"
+            >
+              {isLoading ? (
+                <span className="flex items-center justify-center">
+                  <Loader2 className="animate-spin mr-2" />
+                  Processing...
+                </span>
+              ) : (
+                "Generate Video"
+              )}
+            </button>
 
             {/* Status and Error Display */}
             {(isLoading || error) && (
@@ -660,26 +679,27 @@ export default function GenerateWithAI() {
               </div>
             )}
 
-            {/* Preview Section */}
+            {/* View Latest Edit Button - Only show after generation */}
             {editedVideoUrl && !isLoading && (
-              <div className="mt-8">
-                <h3 className="text-xl font-semibold mb-4">Edited Video</h3>
-                <div className="aspect-[9/16] bg-gray-800 rounded-lg overflow-hidden">
-                  <video
-                    src={editedVideoUrl}
-                    controls
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                      setError("Error loading video. Please try again.");
-                      console.error("Video error:", e);
-                    }}
-                  />
-                </div>
-              </div>
+              <button
+                onClick={() => setShowPreviewModal(true)}
+                className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200"
+              >
+                <Maximize2 className="h-5 w-5" />
+                View Latest Edit
+              </button>
             )}
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      {showPreviewModal && editedVideoUrl && (
+        <VideoPreviewModal
+          videoUrl={editedVideoUrl}
+          onClose={() => setShowPreviewModal(false)}
+        />
+      )}
     </div>
   );
 }
