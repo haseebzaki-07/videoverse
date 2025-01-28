@@ -221,31 +221,43 @@ export async function POST(req: NextRequest) {
     // Build complex filter graph
     let filterGraph = "";
 
-    // 1. First normalize frame rates and trim clips
+    // 1. First normalize frame rates, scale to target resolution, and trim clips
     for (const [index, clip] of adjustedClips.entries()) {
-      // Add fps filter to ensure constant frame rate before trim
-      filterGraph += `[${index}:v]fps=24,trim=duration=${clip.actualDuration},setpts=PTS-STARTPTS[clip${index}];`;
+      // Add fps filter, scale, and trim for each clip
+      filterGraph +=
+        `[${index}:v]` +
+        // First normalize fps
+        `fps=24,` +
+        // Scale to target resolution while maintaining aspect ratio
+        `scale=1080:1920:force_original_aspect_ratio=decrease,` +
+        // Pad to fill the frame
+        `pad=1080:1920:(ow-iw)/2:(oh-ih)/2,` +
+        // Set SAR to 1:1
+        `setsar=1,` +
+        // Apply trim and PTS adjustment
+        `trim=duration=${clip.actualDuration},setpts=PTS-STARTPTS` +
+        `[normclip${index}];`;
     }
 
-    // 2. Add transitions between clips using concat with crossfade
+    // 2. Add transitions between clips
     if (body.effects?.transition) {
       const transitionDuration = body.effects.transition.duration || 1;
 
-      // Create a temporary clip for each video that includes the fade effect
+      // Apply fade effects to normalized clips
       for (let i = 0; i < adjustedClips.length; i++) {
         const duration = adjustedClips[i].actualDuration;
 
         if (i === 0) {
           // First clip only needs fade out
-          filterGraph += `[clip${i}]fade=t=out:st=${
+          filterGraph += `[normclip${i}]fade=t=out:st=${
             duration - transitionDuration
           }:d=${transitionDuration}[fadedclip${i}];`;
         } else if (i === adjustedClips.length - 1) {
           // Last clip only needs fade in
-          filterGraph += `[clip${i}]fade=t=in:st=0:d=${transitionDuration}[fadedclip${i}];`;
+          filterGraph += `[normclip${i}]fade=t=in:st=0:d=${transitionDuration}[fadedclip${i}];`;
         } else {
           // Middle clips need both fade in and fade out
-          filterGraph += `[clip${i}]fade=t=in:st=0:d=${transitionDuration},fade=t=out:st=${
+          filterGraph += `[normclip${i}]fade=t=in:st=0:d=${transitionDuration},fade=t=out:st=${
             duration - transitionDuration
           }:d=${transitionDuration}[fadedclip${i}];`;
         }
@@ -257,8 +269,10 @@ export async function POST(req: NextRequest) {
         .join("");
       filterGraph += `${concatInputs}concat=n=${adjustedClips.length}:v=1:a=0[mainv];`;
     } else {
-      // Simple concatenation without transitions
-      const concatInputs = adjustedClips.map((_, i) => `[clip${i}]`).join("");
+      // Simple concatenation of normalized clips without transitions
+      const concatInputs = adjustedClips
+        .map((_, i) => `[normclip${i}]`)
+        .join("");
       filterGraph += `${concatInputs}concat=n=${adjustedClips.length}:v=1:a=0[mainv];`;
     }
 
@@ -353,10 +367,8 @@ export async function POST(req: NextRequest) {
     builder.addOutputOption("-preset medium");
     builder.addOutputOption("-crf 23");
     builder.addOutputOption("-c:a aac");
-    if (body.output.resolution) {
-      builder.addOutputOption(`-s ${body.output.resolution}`);
-    }
-    builder.addOutputOption(`-r 24`); // Force constant output frame rate
+    builder.addOutputOption("-s 1080x1920"); // Force output resolution
+    builder.addOutputOption("-r 24"); // Force constant output frame rate
     builder.addOutputOption(`-t ${targetDuration}`);
 
     const ffmpegCommand = builder.build();
