@@ -16,6 +16,9 @@ export default function Sidebar() {
         <Link href="/my-creations" className="nav-link">
           My Creations
         </Link>
+        <Link href="/generateWithAI" className="nav-link">
+          Edit with AI
+        </Link>
         <Link
           href={`/videoEditor?videoUrl=${encodeURIComponent(
             "/output/final_video.mp4"

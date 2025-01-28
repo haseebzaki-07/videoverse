@@ -39,12 +39,10 @@ export default function Home() {
               Start Creating
             </Link>
             <Link
-              href={`/videoEditor?videoUrl=${encodeURIComponent(
-                "/output/final_video.mp4"
-              )}`}
+              href={`/generateWithAI`}
               className="bg-white/10 backdrop-blur-md text-white px-8 py-3 rounded-full font-medium hover:bg-white/20 transition-all"
             >
-              Try Editor
+              Try AI Editor
             </Link>
           </div>
 
