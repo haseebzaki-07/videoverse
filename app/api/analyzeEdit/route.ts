@@ -24,16 +24,6 @@ const DEFAULT_VALUES = {
   resolution: "1080x1920",
   fps: 24,
   transitionDuration: 1,
-  fontSize: {
-    title: 42, // Reduced from 48 for better readability
-    subtitle: 36, // Reduced from 42
-    caption: 32, // Reduced from 36
-  },
-  textColors: {
-    primary: "#FFFFFF",
-    secondary: "#FFD700",
-    accent: "#00FF00",
-  },
   audio: {
     volume: 0.8, // 0.8 = 80% volume, more balanced than 1.0
     fadeIn: 2, // Reduced from 2 for smoother transition
@@ -63,7 +53,7 @@ const DEFAULT_VALUES = {
     dreamy: "gblur=sigma=10",
     sharp: "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=2",
     sketch: "edgedetect=low=0.1:high=0.3",
-    vignette: "vignette=angle=45:strength=0.7",
+    vignette: "vignette,eq=gamma=1.5",
   } as const,
 };
 
@@ -124,18 +114,6 @@ export async function POST(req: NextRequest) {
           "type": string,
           "duration": number
         },
-        "text": Array<{
-          "content": string,
-          "position": string,
-          "fontSize": number,
-          "color": string,
-          "startTime": number,
-          "duration": number,
-          "bold"?: boolean,
-          "italic"?: boolean,
-          "boxColor"?: string,
-          "boxOpacity"?: number
-        }>,
         "colorAdjustment": {
           "brightness": number,
           "contrast": number,
@@ -205,27 +183,6 @@ export async function POST(req: NextRequest) {
             type: editRequest.effects?.transition?.type || "fade",
             duration: editRequest.effects?.transition?.duration || 1,
           },
-          text: (editRequest.effects?.text || []).map(
-            (text: {
-              content: string;
-              position: string;
-              fontSize: number;
-              color: string;
-              startTime?: number;
-              duration?: number;
-              bold?: boolean;
-              boxOpacity?: number;
-            }) => ({
-              content: text.content,
-              position: text.position,
-              fontSize: text.fontSize,
-              color: text.color,
-              startTime: text.startTime,
-              duration: text.duration,
-              bold: text.bold,
-              boxOpacity: text.boxOpacity,
-            })
-          ),
           colorAdjustment: {
             brightness:
               editRequest.effects?.colorAdjustment?.brightness || 0.05,
@@ -368,24 +325,6 @@ function mergeWithDefaults(aiResponse: any) {
 
   const finalFilter = getFilterValue(aiResponse.finalFilter);
 
-  // Process text overlays with reasonable font sizes
-  const textOverlays = (aiResponse.effects?.text || []).map(
-    (text: {
-      content: string;
-      position: string;
-      fontSize?: number;
-      color?: string;
-      startTime?: number;
-      duration?: number;
-      boxOpacity?: number;
-    }) => ({
-      ...text,
-      fontSize: clamp(text.fontSize || DEFAULT_VALUES.fontSize.title, 24, 48),
-      color: text.color || DEFAULT_VALUES.textColors.primary,
-      boxOpacity: text.boxOpacity || 0.5,
-    })
-  );
-
   return {
     clips: defaultClips,
     audio: audioSettings,
@@ -405,7 +344,6 @@ function mergeWithDefaults(aiResponse: any) {
           2
         ),
       },
-      text: textOverlays,
       colorAdjustment,
       filters: [
         {
@@ -456,19 +394,6 @@ function generateDefaultRequest() {
         type: "fade",
         duration: DEFAULT_VALUES.transitionDuration,
       },
-      text: [
-        {
-          content: "VideoVerse",
-          position: "center,center",
-          fontSize: DEFAULT_VALUES.fontSize.title,
-          color: DEFAULT_VALUES.textColors.primary,
-          startTime: 0,
-          duration: 3,
-          bold: true,
-          boxColor: "#000000",
-          boxOpacity: 0.5,
-        },
-      ],
       colorAdjustment: DEFAULT_VALUES.colorAdjustment,
       filters: [
         {
