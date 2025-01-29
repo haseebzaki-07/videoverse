@@ -20,6 +20,7 @@ interface VideoClip {
   trimStart?: number;
   trimEnd?: number;
   effects?: VideoEffect[];
+  speed?: number;
 }
 
 interface EditRequest {
@@ -61,6 +62,15 @@ interface EditRequest {
     };
     speed?: number;
     stabilize?: boolean;
+    zoomPan?: {
+      zoomStart?: number;
+      zoomEnd?: number;
+      xStart?: number;
+      xEnd?: number;
+      yStart?: number;
+      yEnd?: number;
+      duration?: number;
+    };
   };
   finalFilter?: string;
 }
@@ -102,18 +112,15 @@ class FFmpegCommandBuilder {
 
   private escapeText(text: string): string {
     return text
-      .replace(/'/g, "\\'")
+      .replace(/'/g, "'\\''")
       .replace(/:/g, "\\:")
       .replace(/\[/g, "\\[")
       .replace(/\]/g, "\\]")
-      .replace(/,/g, "\\,")
-      .replace(/\(/g, "\\(")
-      .replace(/\)/g, "\\)")
-      .replace(/\\/g, "\\\\");
+      .replace(/\\/g, "/");
   }
 
   private getFontPath(): string {
-    return "C\\\\:\\\\Windows\\\\Fonts\\\\arial.ttf";
+    return "C:/Windows/Fonts/arial.ttf";
   }
 
   private getTextPosition(
@@ -155,16 +162,16 @@ class FFmpegCommandBuilder {
     const duration = text.duration || 0;
     const position = this.getTextPosition(text.position);
     const escapedText = this.escapeText(text.content);
-    const fontPath = this.getFontPath();
 
+    // Build the drawtext filter with proper escaping but keep font path format
     return (
       `[${lastLabel}]drawtext=` +
-      `text='${escapedText}':` +
+      `text='${escapedText}':` + // Keep quotes around text
       `fontsize=${text.fontSize}:` +
       `fontcolor=${text.color}:` +
       `${position}:` +
-      `fontfile='${fontPath}':` +
-      `enable=between(t\\,${startTime}\\,${startTime + duration})` +
+      `fontfile='C:/Windows/Fonts/arial.ttf':` + // Keep original font path format
+      `enable='gte(t,${startTime})*lte(t,${startTime + duration})'` + // Use gte/lte instead of between
       `[${nextLabel}];`
     );
   }
@@ -242,7 +249,7 @@ export async function POST(req: NextRequest) {
     const builder = new FFmpegCommandBuilder(outputPath);
     const streamIndexes: number[] = [];
 
-    // Add video inputs with trim filters
+    // Add video inputs with trim and speed filters
     let currentTime = 0;
     const clipFilters: string[] = [];
 
@@ -251,8 +258,9 @@ export async function POST(req: NextRequest) {
       const streamIndex = builder.addInput(videoPath);
       streamIndexes.push(streamIndex);
 
-      // Create trim filter for each clip
-      const trimFilter = `[${streamIndex}:v]trim=duration=${clip.actualDuration},setpts=PTS-STARTPTS[clip${index}];`;
+      // Create trim and speed filter for each clip
+      const speed = clip.speed || 1.0;
+      const trimFilter = `[${streamIndex}:v]trim=duration=${clip.actualDuration},setpts=PTS/${speed}[clip${index}];`;
       clipFilters.push(trimFilter);
     }
 
@@ -268,42 +276,66 @@ export async function POST(req: NextRequest) {
 
     // 1. First normalize frame rates, scale to target resolution, and trim clips
     for (const [index, clip] of adjustedClips.entries()) {
-      // Add fps filter, scale, and trim for each clip
       filterGraph +=
-        `[${index}:v]` +
-        // First normalize fps
+        `[clip${index}]` +
+        // First normalize fps and scale
         `fps=24,` +
-        // Scale to target resolution while maintaining aspect ratio
-        `scale=1080:1920:force_original_aspect_ratio=decrease,` +
-        // Pad to fill the frame
-        `pad=1080:1920:(ow-iw)/2:(oh-ih)/2,` +
-        // Set SAR to 1:1
-        `setsar=1,` +
-        // Apply trim and PTS adjustment
-        `trim=duration=${clip.actualDuration},setpts=PTS-STARTPTS` +
-        `[normclip${index}];`;
+        `scale=4000:-1,` + // Scale up for smoother zoom
+        `setsar=1` +
+        `[scaledclip${index}];`;
+
+      // Apply speed effect
+      filterGraph +=
+        `[scaledclip${index}]setpts=${1 / (clip.speed || 1)}*PTS` +
+        `[speedclip${index}];`;
+
+      // Apply zoompan if specified
+      if (body.effects?.zoomPan) {
+        const {
+          zoomStart = 1.0,
+          zoomEnd = 2.0,
+          duration = 5,
+        } = body.effects.zoomPan;
+
+        // Calculate zoom speed based on start, end, and duration
+        const zoomSpeed = ((zoomEnd - zoomStart) / (duration * 24)).toFixed(4);
+
+        filterGraph +=
+          `[speedclip${index}]zoompan=` +
+          `z='if(eq(on,1),${zoomStart},min(${zoomEnd},pzoom+${zoomSpeed}))':` +
+          `x='iw/2-(iw/zoom/2)':` +
+          `y='ih/2-(ih/zoom/2)':` +
+          `d=1:s=1080x1920:fps=24` +
+          `[zoomedclip${index}];`;
+      } else {
+        filterGraph +=
+          `[speedclip${index}]scale=1080:1920:force_original_aspect_ratio=decrease,` +
+          `pad=1080:1920:(ow-iw)/2:(oh-ih)/2` +
+          `[zoomedclip${index}];`;
+      }
     }
 
     // 2. Add transitions between clips
     if (body.effects?.transition) {
       const transitionDuration = body.effects.transition.duration || 1;
 
-      // Apply fade effects to normalized clips
+      // Apply fade effects to zoomed clips
       for (let i = 0; i < adjustedClips.length; i++) {
-        const duration = adjustedClips[i].actualDuration;
+        const clipDuration =
+          adjustedClips[i].actualDuration / (adjustedClips[i].speed || 1);
 
         if (i === 0) {
           // First clip only needs fade out
-          filterGraph += `[normclip${i}]fade=t=out:st=${
-            duration - transitionDuration
+          filterGraph += `[zoomedclip${i}]fade=t=out:st=${
+            clipDuration - transitionDuration
           }:d=${transitionDuration}[fadedclip${i}];`;
         } else if (i === adjustedClips.length - 1) {
           // Last clip only needs fade in
-          filterGraph += `[normclip${i}]fade=t=in:st=0:d=${transitionDuration}[fadedclip${i}];`;
+          filterGraph += `[zoomedclip${i}]fade=t=in:st=0:d=${transitionDuration}[fadedclip${i}];`;
         } else {
           // Middle clips need both fade in and fade out
-          filterGraph += `[normclip${i}]fade=t=in:st=0:d=${transitionDuration},fade=t=out:st=${
-            duration - transitionDuration
+          filterGraph += `[zoomedclip${i}]fade=t=in:st=0:d=${transitionDuration},fade=t=out:st=${
+            clipDuration - transitionDuration
           }:d=${transitionDuration}[fadedclip${i}];`;
         }
       }
@@ -314,14 +346,14 @@ export async function POST(req: NextRequest) {
         .join("");
       filterGraph += `${concatInputs}concat=n=${adjustedClips.length}:v=1:a=0[mainv];`;
     } else {
-      // Simple concatenation of normalized clips without transitions
+      // Simple concatenation of zoomed clips without transitions
       const concatInputs = adjustedClips
-        .map((_, i) => `[normclip${i}]`)
+        .map((_, i) => `[zoomedclip${i}]`)
         .join("");
       filterGraph += `${concatInputs}concat=n=${adjustedClips.length}:v=1:a=0[mainv];`;
     }
 
-    // 3. Apply other effects starting from mainv
+    // Remove the old zoompan section and continue with color adjustments
     if (body.effects) {
       // Color adjustments
       if (body.effects.colorAdjustment) {
@@ -341,8 +373,10 @@ export async function POST(req: NextRequest) {
         body.effects.text.forEach((text, index) => {
           const nextLabel =
             index === body.effects.text.length - 1 ? "textv" : `text${index}`;
-          filterGraph += builder.buildTextFilter(text, lastLabel, nextLabel);
-          lastLabel = nextLabel;
+          if (text) {
+            filterGraph += builder.buildTextFilter(text, lastLabel, nextLabel);
+            lastLabel = nextLabel;
+          }
         });
       } else {
         filterGraph += `[colorv]copy[textv];`;
