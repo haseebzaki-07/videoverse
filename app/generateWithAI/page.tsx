@@ -2,18 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Loader2, Maximize2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider";
+
 import VideoPreviewModal from "@/components/VideoPreviewModal";
 
 interface VideoFile {
@@ -288,7 +277,7 @@ export default function GenerateWithAI() {
                   <p className="text-xs text-center mt-1">{video.name}</p>
                 </div>
               ))}
-            </div>
+            </div> 
           </div>
 
           {/* Right Side - Settings */}

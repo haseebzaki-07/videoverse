@@ -62,6 +62,7 @@ interface EditRequest {
     speed?: number;
     stabilize?: boolean;
   };
+  finalFilter?: string;
 }
 
 class FFmpegCommandBuilder {
@@ -77,11 +78,11 @@ class FFmpegCommandBuilder {
     return this.currentStreamIndex++;
   }
 
-  addFilter(filter: string) {
+  addFilter(filter: string): void {
     this.filterComplex.push(filter);
   }
 
-  addOutputOption(option: string) {
+  addOutputOption(option: string): void {
     this.outputOptions.push(option);
   }
 
@@ -99,7 +100,22 @@ class FFmpegCommandBuilder {
     }"`;
   }
 
-  // Add new helper method for text positioning
+  private escapeText(text: string): string {
+    return text
+      .replace(/'/g, "\\'")
+      .replace(/:/g, "\\:")
+      .replace(/\[/g, "\\[")
+      .replace(/\]/g, "\\]")
+      .replace(/,/g, "\\,")
+      .replace(/\(/g, "\\(")
+      .replace(/\)/g, "\\)")
+      .replace(/\\/g, "\\\\");
+  }
+
+  private getFontPath(): string {
+    return "C\\\\:\\\\Windows\\\\Fonts\\\\arial.ttf";
+  }
+
   private getTextPosition(
     position: string,
     width: number = 1080,
@@ -115,13 +131,42 @@ class FFmpegCommandBuilder {
       "center,bottom-100": `x=(w-text_w)/2:y=h-text_h-100`,
     };
 
-    // If position contains explicit coordinates (e.g., "10,10")
     if (/^\d+,\d+$/.test(position)) {
       const [x, y] = position.split(",");
       return `x=${x}:y=${y}`;
     }
 
     return positions[position] || positions["center,center"];
+  }
+
+  buildTextFilter(
+    text: {
+      content: string;
+      position: string;
+      fontSize: number;
+      color: string;
+      startTime?: number;
+      duration?: number;
+    },
+    lastLabel: string,
+    nextLabel: string
+  ): string {
+    const startTime = text.startTime || 0;
+    const duration = text.duration || 0;
+    const position = this.getTextPosition(text.position);
+    const escapedText = this.escapeText(text.content);
+    const fontPath = this.getFontPath();
+
+    return (
+      `[${lastLabel}]drawtext=` +
+      `text='${escapedText}':` +
+      `fontsize=${text.fontSize}:` +
+      `fontcolor=${text.color}:` +
+      `${position}:` +
+      `fontfile='${fontPath}':` +
+      `enable=between(t\\,${startTime}\\,${startTime + duration})` +
+      `[${nextLabel}];`
+    );
   }
 }
 
@@ -291,38 +336,12 @@ export async function POST(req: NextRequest) {
       }
 
       // Text overlays
-      let lastLabel = "colorv";
       if (body.effects.text && body.effects.text.length > 0) {
+        let lastLabel = "colorv";
         body.effects.text.forEach((text, index) => {
-          const startTime = text.startTime || 0;
-          const duration = text.duration || 0;
           const nextLabel =
             index === body.effects.text.length - 1 ? "textv" : `text${index}`;
-
-          // Get text position
-          let position = "";
-          switch (text.position) {
-            case "center,center-100":
-              position = "x=(w-text_w)/2:y=(h-text_h)/2-100";
-              break;
-            case "center,center+100":
-              position = "x=(w-text_w)/2:y=(h-text_h)/2+100";
-              break;
-            case "center,center":
-            default:
-              position = "x=(w-text_w)/2:y=(h-text_h)/2";
-              break;
-          }
-
-          filterGraph +=
-            `[${lastLabel}]drawtext=text='${text.content}':` +
-            `fontsize=${text.fontSize}:` +
-            `fontcolor=${text.color}:` +
-            `${position}:` +
-            `fontfile='C\\:/Windows/Fonts/arial.ttf':` +
-            `enable='between(t,${startTime},${startTime + duration})'` +
-            `[${nextLabel}];`;
-
+          filterGraph += builder.buildTextFilter(text, lastLabel, nextLabel);
           lastLabel = nextLabel;
         });
       } else {
@@ -338,7 +357,12 @@ export async function POST(req: NextRequest) {
       }
 
       // Final format conversion
-      filterGraph += `[speedv]format=yuv420p[finalv]`;
+      if (body.finalFilter) {
+        filterGraph += `[speedv]${body.finalFilter}[filteredv];`;
+        filterGraph += `[filteredv]format=yuv420p[finalv];`;
+      } else {
+        filterGraph += `[speedv]format=yuv420p[finalv];`;
+      }
     } else {
       // If no effects, just convert format
       filterGraph += `[mainv]format=yuv420p[finalv]`;

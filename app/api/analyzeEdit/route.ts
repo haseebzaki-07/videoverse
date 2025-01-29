@@ -7,6 +7,17 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Add type for video filters
+type VideoFilter =
+  | "enhance"
+  | "dramatic"
+  | "warm"
+  | "cool"
+  | "dreamy"
+  | "sharp"
+  | "sketch"
+  | "vignette";
+
 // Update DEFAULT_VALUES with more balanced settings
 const DEFAULT_VALUES = {
   duration: 5,
@@ -25,10 +36,11 @@ const DEFAULT_VALUES = {
   },
   audio: {
     volume: 0.8, // 0.8 = 80% volume, more balanced than 1.0
-    fadeIn: 1.5, // Reduced from 2 for smoother transition
-    fadeOut: 1.5, // Reduced from 2 for smoother transition
+    fadeIn: 2, // Reduced from 2 for smoother transition
+    fadeOut: 2, // Reduced from 2 for smoother transition
     bass: 2, // Reduced from 5 for clearer audio
     treble: 1, // Reduced from 5 for clearer audio
+    normalize: true,
   },
   colorAdjustment: {
     brightness: 0.05, // Subtle brightness increase (range: -1 to 1)
@@ -40,9 +52,19 @@ const DEFAULT_VALUES = {
   filters: {
     vignette: {
       angle: 45,
-      strength: 0.3, // Reduced strength for subtler effect
+      strength: 0.7, // Reduced strength for subtler effect
     },
   },
+  videoFilters: {
+    enhance: "eq=contrast=1.5:brightness=0.1:saturation=1.2",
+    dramatic: "curves=preset=strong_contrast",
+    warm: "colorbalance=rs=.3:gs=-.3:bs=-.3",
+    cool: "hue=h=90:s=1",
+    dreamy: "gblur=sigma=10",
+    sharp: "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=2",
+    sketch: "edgedetect=low=0.1:high=0.3",
+    vignette: "vignette=angle=45:strength=0.7",
+  } as const,
 };
 
 interface PromptRequest {
@@ -61,9 +83,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Prepare the system message for OpenAI
+    // Update the system message for OpenAI
     const systemMessage = `You are a video editing assistant. Analyze the user's prompt and generate a detailed video editing request.
-    The request should include appropriate transitions, text overlays, effects, and audio settings.
+    The request should include appropriate transitions, text overlays, filters, color adjustments, effects, speed and audio settings.
+    
+    You can select one of the following video filters based on the user's prompt or mood:
+    - "enhance": Enhances overall video quality with balanced contrast and saturation
+    - "dramatic": Creates a strong contrast effect for dramatic scenes
+    - "warm": Adds a warm color temperature
+    - "cool": Adds a cool color temperature
+    - "dreamy": Creates a soft, dream-like effect
+    - "sharp": Enhances details and sharpness
+    - "sketch": Creates an artistic sketch-like effect
+    - "vignette": Adds a vignette effect to the video
+
+    If the user's prompt doesn't specify a particular mood or style, randomly select one that might enhance the video.
+    
     Generate a JSON response that matches the VideoEditor API requirements with the following structure:
     {
       "clips": Array<{
@@ -113,7 +148,8 @@ export async function POST(req: NextRequest) {
           "options": object
         }>,
         "speed": number
-      }
+      },
+      "finalFilter": string
     }`;
 
     // Call OpenAI API
@@ -142,6 +178,72 @@ export async function POST(req: NextRequest) {
       logger.error("Error parsing OpenAI response", { error: parseError });
       editRequest = generateDefaultRequest();
     }
+
+    // Update the logging before making the request to videoEditor
+    logger.info("Sending request to video editor API:", {
+      requestBody: JSON.stringify({
+        clips: editRequest.clips.map((clip) => ({
+          fileName: clip.fileName,
+          duration: clip.duration,
+        })),
+        audio: {
+          volume: editRequest.audio?.volume || 1,
+          fadeIn: editRequest.audio?.fadeIn || 2,
+          fadeOut: editRequest.audio?.fadeOut || 2,
+          bass: editRequest.audio?.bass || 2,
+          treble: editRequest.audio?.treble || 1,
+          normalize: editRequest.audio?.normalize || true,
+        },
+        output: {
+          format: editRequest.output.format,
+          resolution: editRequest.output.resolution,
+          fps: editRequest.output.fps,
+          quality: editRequest.output.quality,
+        },
+        effects: {
+          transition: {
+            type: editRequest.effects?.transition?.type || "fade",
+            duration: editRequest.effects?.transition?.duration || 1,
+          },
+          text: (editRequest.effects?.text || []).map(
+            (text: {
+              content: string;
+              position: string;
+              fontSize: number;
+              color: string;
+              startTime?: number;
+              duration?: number;
+              bold?: boolean;
+              boxOpacity?: number;
+            }) => ({
+              content: text.content,
+              position: text.position,
+              fontSize: text.fontSize,
+              color: text.color,
+              startTime: text.startTime,
+              duration: text.duration,
+              bold: text.bold,
+              boxOpacity: text.boxOpacity,
+            })
+          ),
+          colorAdjustment: {
+            brightness:
+              editRequest.effects?.colorAdjustment?.brightness || 0.05,
+            contrast: editRequest.effects?.colorAdjustment?.contrast || 1.1,
+            saturation:
+              editRequest.effects?.colorAdjustment?.saturation || 1.05,
+            gamma: editRequest.effects?.colorAdjustment?.gamma || 1,
+            vibrance: editRequest.effects?.colorAdjustment?.vibrance || 1.1,
+          },
+          filters: (editRequest.effects?.filters || []).map((filter) => ({
+            type: filter.type,
+            options: filter.options,
+          })),
+          speed: editRequest.effects?.speed || 1,
+        },
+        finalFilter: editRequest.finalFilter,
+      }),
+    });
 
     // Forward the request to the video editor API
     const editorResponse = await fetch(
@@ -250,13 +352,39 @@ function mergeWithDefaults(aiResponse: any) {
     ),
   };
 
+  // Select a random filter if none specified
+  const filterKeys = Object.keys(DEFAULT_VALUES.videoFilters) as VideoFilter[];
+  const getFilterValue = (filterName: string | undefined) => {
+    if (!filterName) {
+      const randomKey =
+        filterKeys[Math.floor(Math.random() * filterKeys.length)];
+      return DEFAULT_VALUES.videoFilters[randomKey];
+    }
+    return (
+      DEFAULT_VALUES.videoFilters[filterName as VideoFilter] ||
+      DEFAULT_VALUES.videoFilters.enhance
+    );
+  };
+
+  const finalFilter = getFilterValue(aiResponse.finalFilter);
+
   // Process text overlays with reasonable font sizes
-  const textOverlays = (aiResponse.effects?.text || []).map((text: any) => ({
-    ...text,
-    fontSize: clamp(text.fontSize || DEFAULT_VALUES.fontSize.title, 24, 48),
-    color: text.color || DEFAULT_VALUES.textColors.primary,
-    boxOpacity: text.boxOpacity || 0.5,
-  }));
+  const textOverlays = (aiResponse.effects?.text || []).map(
+    (text: {
+      content: string;
+      position: string;
+      fontSize?: number;
+      color?: string;
+      startTime?: number;
+      duration?: number;
+      boxOpacity?: number;
+    }) => ({
+      ...text,
+      fontSize: clamp(text.fontSize || DEFAULT_VALUES.fontSize.title, 24, 48),
+      color: text.color || DEFAULT_VALUES.textColors.primary,
+      boxOpacity: text.boxOpacity || 0.5,
+    })
+  );
 
   return {
     clips: defaultClips,
@@ -288,8 +416,9 @@ function mergeWithDefaults(aiResponse: any) {
           },
         },
       ],
-      speed: clamp(aiResponse.effects?.speed || 1.0, 0.8, 1.2),
+      speed: clamp(aiResponse.effects?.speed || 1, 0.5, 2.0),
     },
+    finalFilter,
   };
 }
 
@@ -307,6 +436,11 @@ function generateDefaultRequest() {
     { fileName: "video_4.mp4", duration: 5 },
     { fileName: "video_5.mp4", duration: 5 },
   ];
+
+  // Select a random default filter and get its value
+  const filterKeys = Object.keys(DEFAULT_VALUES.videoFilters) as VideoFilter[];
+  const randomKey = filterKeys[Math.floor(Math.random() * filterKeys.length)];
+  const randomFilter = DEFAULT_VALUES.videoFilters[randomKey];
 
   return {
     clips: defaultClips,
@@ -347,5 +481,6 @@ function generateDefaultRequest() {
       ],
       speed: 1.0,
     },
+    finalFilter: randomFilter,
   };
 }
