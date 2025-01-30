@@ -39,12 +39,6 @@ const DEFAULT_VALUES = {
     gamma: 1.0, // Neutral gamma
     vibrance: 1.1, // Slight vibrance enhancement
   },
-  filters: {
-    vignette: {
-      angle: 45,
-      strength: 0.7, // Reduced strength for subtler effect
-    },
-  },
   videoFilters: {
     enhance: "eq=contrast=1.5:brightness=0.1:saturation=1.2",
     dramatic: "curves=preset=strong_contrast",
@@ -61,6 +55,13 @@ interface PromptRequest {
   prompt: string;
 }
 
+// Define interface for clip structure
+interface Clip {
+  fileName?: string;
+  duration?: number;
+  startTime?: number;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body: PromptRequest = await req.json();
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     // Update the system message for OpenAI
     const systemMessage = `You are a video editing assistant. Analyze the user's prompt and generate a detailed video editing request.
-    The request should include appropriate transitions, text overlays, filters, color adjustments, effects, speed and audio settings.
+    The request should include appropriate transitions, text overlays, videofilters, color adjustments, effects, speed and audio settings.
     
     You can select one of the following video filters based on the user's prompt or mood:
     - "enhance": Enhances overall video quality with balanced contrast and saturation
@@ -93,7 +94,8 @@ export async function POST(req: NextRequest) {
     {
       "clips": Array<{
         "fileName": string,
-        "duration": number
+        "duration": number,  // Duration in seconds for each clip
+        "startTime"?: number // Optional start time for the clip
       }>,
       "audio": {
         "volume": number,
@@ -105,7 +107,7 @@ export async function POST(req: NextRequest) {
       },
       "output": {
         "format": string,
-        "resolution": string,
+        "resolution": string,  // Format: "widthxheight" (e.g., "1080x1920" for portrait, "1920x1080" for landscape)
         "fps": number,
         "quality": string
       },
@@ -121,10 +123,6 @@ export async function POST(req: NextRequest) {
           "gamma": number,
           "vibrance": number
         },
-        "filters": Array<{
-          "type": string,
-          "options": object
-        }>,
         "speed": number
       },
       "finalFilter": string
@@ -152,6 +150,7 @@ export async function POST(req: NextRequest) {
       // Parse the AI response and merge with defaults
       const parsedResponse = JSON.parse(aiResponse);
       editRequest = mergeWithDefaults(parsedResponse);
+      console.log("editRequest", editRequest);
     } catch (parseError) {
       logger.error("Error parsing OpenAI response", { error: parseError });
       editRequest = generateDefaultRequest();
@@ -192,10 +191,6 @@ export async function POST(req: NextRequest) {
             gamma: editRequest.effects?.colorAdjustment?.gamma || 1,
             vibrance: editRequest.effects?.colorAdjustment?.vibrance || 1.1,
           },
-          filters: (editRequest.effects?.filters || []).map((filter) => ({
-            type: filter.type,
-            options: filter.options,
-          })),
           speed: editRequest.effects?.speed || 1,
         },
         finalFilter: editRequest.finalFilter,
@@ -240,7 +235,7 @@ export async function POST(req: NextRequest) {
 
 // Update mergeWithDefaults function
 function mergeWithDefaults(aiResponse: any) {
-  // Add default clips configuration
+  // Handle dynamic clip durations if specified in AI response
   const defaultClips = [
     { fileName: "video_1.mp4", duration: 5 },
     { fileName: "video_2.mp4", duration: 5 },
@@ -248,6 +243,23 @@ function mergeWithDefaults(aiResponse: any) {
     { fileName: "video_4.mp4", duration: 5 },
     { fileName: "video_5.mp4", duration: 5 },
   ];
+
+  // If AI response includes clips with durations, merge them with defaults
+  const clips = aiResponse.clips?.length
+    ? aiResponse.clips.map((clip: Clip, index: number) => ({
+        fileName: `video_${index + 1}.mp4`,
+        duration: clip.duration || defaultClips[index].duration,
+        startTime: clip.startTime,
+      }))
+    : defaultClips;
+
+  // Handle dynamic resolution if specified in AI response
+  const resolution = aiResponse.output?.resolution || DEFAULT_VALUES.resolution;
+
+  // Validate resolution format (should be widthxheight)
+  const validResolution = /^\d+x\d+$/.test(resolution)
+    ? resolution
+    : DEFAULT_VALUES.resolution;
 
   // Ensure audio values are within reasonable ranges
   const audioSettings = {
@@ -326,13 +338,13 @@ function mergeWithDefaults(aiResponse: any) {
   const finalFilter = getFilterValue(aiResponse.finalFilter);
 
   return {
-    clips: defaultClips,
+    clips,
     audio: audioSettings,
     output: {
       format: "mp4",
-      resolution: DEFAULT_VALUES.resolution,
-      fps: DEFAULT_VALUES.fps,
-      quality: "high",
+      resolution: validResolution,
+      fps: aiResponse.output?.fps || DEFAULT_VALUES.fps,
+      quality: aiResponse.output?.quality || "high",
     },
     effects: {
       transition: {
@@ -345,15 +357,6 @@ function mergeWithDefaults(aiResponse: any) {
         ),
       },
       colorAdjustment,
-      filters: [
-        {
-          type: "vignette",
-          options: {
-            angle: DEFAULT_VALUES.filters.vignette.angle,
-            strength: DEFAULT_VALUES.filters.vignette.strength,
-          },
-        },
-      ],
       speed: clamp(aiResponse.effects?.speed || 1, 0.5, 2.0),
     },
     finalFilter,
@@ -395,15 +398,6 @@ function generateDefaultRequest() {
         duration: DEFAULT_VALUES.transitionDuration,
       },
       colorAdjustment: DEFAULT_VALUES.colorAdjustment,
-      filters: [
-        {
-          type: "vignette",
-          options: {
-            angle: DEFAULT_VALUES.filters.vignette.angle,
-            strength: DEFAULT_VALUES.filters.vignette.strength,
-          },
-        },
-      ],
       speed: 1.0,
     },
     finalFilter: randomFilter,
