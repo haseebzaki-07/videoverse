@@ -1,7 +1,35 @@
 "use client";
 import Link from "next/link";
+import { Home, MessageSquare, Music, Video } from "lucide-react";
 
 export default function Sidebar() {
+  const routes = [
+    {
+      label: "Home",
+      icon: Home,
+      href: "/",
+      color: "text-sky-500",
+    },
+    {
+      label: "Generate with AI",
+      icon: MessageSquare,
+      href: "/generateWithAI",
+      color: "text-violet-500",
+    },
+    {
+      label: "Music Video Generator",
+      icon: Music,
+      href: "/musicVideoGenerator",
+      color: "text-pink-700",
+    },
+    {
+      label: "Generate with Kling",
+      icon: Video,
+      href: "/generateWithKling",
+      color: "text-green-500",
+    },
+  ];
+
   return (
     <div className="sidebar">
       <div className="logo">
@@ -28,16 +56,7 @@ export default function Sidebar() {
           Video Editor
         </Link>
       </nav>
-      <div className="upgrade-section">
-        <h3>Unlock more features — go Pro!</h3>
-        <ul>
-          <li>All languages support</li>
-          <li>More voice options</li>
-          <li>Custom prompts, images</li>
-          <li>Subtitle customization</li>
-        </ul>
-        <button className="upgrade-button">Upgrade</button>
-      </div>
+
       <div className="profile-section">
         <p>Haseebzaki13</p>
         <p>haseebzaki13@gmail.com</p>
