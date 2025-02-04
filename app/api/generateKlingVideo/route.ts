@@ -9,16 +9,13 @@ const KLING_API_KEY = process.env.KLING_API_KEY!;
 const KLING_API_BASE_URL = "https://api.piapi.ai/api/v1";
 
 // Constants for video generation
-const DEFAULT_DURATION = 5;
-const MAX_DURATION = 10;
-const MIN_DURATION = 5;
+const VIDEO_DURATION = 5; // Fixed 5-second duration
 const MAX_POLLING_ATTEMPTS = 300; // 25 minutes with 5-second intervals
 const POLLING_INTERVAL = 5000; // 5 seconds
 
 interface KlingVideoRequest {
   prompt: string;
   negative_prompt?: string;
-  duration?: number;
   aspect_ratio?: "16:9" | "9:16" | "1:1";
   mode?: "std" | "pro";
   version?: "1.0" | "1.5" | "1.6";
@@ -36,6 +33,12 @@ interface KlingAPIResponse {
           resource_without_watermark?: string;
         };
       }>;
+    };
+    error?: {
+      code: number;
+      message: string;
+      raw_message?: string;
+      details?: any;
     };
   };
   message: string;
@@ -87,6 +90,7 @@ async function pollForCompletion(taskId: string): Promise<string> {
         taskId,
         status,
         attempt: attempts + 1,
+        responseData: taskResponse.data,
       });
 
       if (status === "completed") {
@@ -106,7 +110,20 @@ async function pollForCompletion(taskId: string): Promise<string> {
         }
         throw new Error("No video resource found in completed task");
       } else if (status === "failed") {
-        throw new Error("Task failed");
+        // Log the complete response data for debugging
+        logger.error("Task failed with details", {
+          taskId,
+          responseData: taskResponse.data,
+          error: taskResponse.data.data.error || "No error details provided",
+        });
+
+        throw new Error(
+          `Task failed: ${
+            taskResponse.data.data.error?.message ||
+            taskResponse.data.message ||
+            "Unknown error occurred"
+          }`
+        );
       }
 
       await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL));
@@ -116,6 +133,7 @@ async function pollForCompletion(taskId: string): Promise<string> {
         error: error instanceof Error ? error.message : "Unknown error",
         taskId,
         attempt: attempts + 1,
+        fullError: error,
       });
       throw error;
     }
@@ -131,11 +149,7 @@ async function pollForCompletion(taskId: string): Promise<string> {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    let { prompt, duration = DEFAULT_DURATION, aspect_ratio = "9:16" } = body;
-
-    // Validate and normalize duration
-    duration = Number(duration) || DEFAULT_DURATION;
-    duration = Math.max(MIN_DURATION, Math.min(duration, MAX_DURATION));
+    const { prompt, aspect_ratio = "9:16" } = body;
 
     if (!prompt) {
       return NextResponse.json(
@@ -146,7 +160,7 @@ export async function POST(request: NextRequest) {
 
     logger.info("Starting video generation", {
       prompt,
-      duration,
+      duration: VIDEO_DURATION,
       aspect_ratio,
     });
 
@@ -166,7 +180,7 @@ export async function POST(request: NextRequest) {
           prompt,
           negative_prompt: "blurry, low quality, distorted",
           cfg_scale: 0.5,
-          duration,
+          duration: VIDEO_DURATION,
           aspect_ratio,
           mode: "std",
           version: "1.6",
