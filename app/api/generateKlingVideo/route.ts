@@ -8,10 +8,17 @@ import logger from "@/utils/logger";
 const KLING_API_KEY = process.env.KLING_API_KEY!;
 const KLING_API_BASE_URL = "https://api.piapi.ai/api/v1";
 
+// Constants for video generation
+const DEFAULT_DURATION = 5;
+const MAX_DURATION = 10;
+const MIN_DURATION = 5;
+const MAX_POLLING_ATTEMPTS = 300; // 25 minutes with 5-second intervals
+const POLLING_INTERVAL = 5000; // 5 seconds
+
 interface KlingVideoRequest {
   prompt: string;
   negative_prompt?: string;
-  duration?: 5 | 10;
+  duration?: number;
   aspect_ratio?: "16:9" | "9:16" | "1:1";
   mode?: "std" | "pro";
   version?: "1.0" | "1.5" | "1.6";
@@ -39,7 +46,7 @@ async function downloadVideo(url: string, filePath: string): Promise<void> {
     const response = await axios({
       method: "get",
       url,
-      responseType: "arraybuffer", // Changed to arraybuffer for better handling
+      responseType: "arraybuffer",
       timeout: 30000, // 30 seconds timeout
     });
 
@@ -57,11 +64,15 @@ async function downloadVideo(url: string, filePath: string): Promise<void> {
 
 async function pollForCompletion(taskId: string): Promise<string> {
   let attempts = 0;
-  const maxAttempts = 60; // 5 minutes maximum wait time
-  const pollInterval = 5000; // 5 seconds between checks
 
-  while (attempts < maxAttempts) {
+  while (attempts < MAX_POLLING_ATTEMPTS) {
     try {
+      logger.info("Polling attempt", {
+        attempt: attempts + 1,
+        maxAttempts: MAX_POLLING_ATTEMPTS,
+        timeElapsed: `${(attempts * POLLING_INTERVAL) / 1000} seconds`,
+      });
+
       const taskResponse = await axios.get<KlingAPIResponse>(
         `${KLING_API_BASE_URL}/task/${taskId}`,
         {
@@ -84,6 +95,11 @@ async function pollForCompletion(taskId: string): Promise<string> {
           const videoUrl =
             videoResource.resource_without_watermark || videoResource.resource;
           if (videoUrl) {
+            logger.info("Video generation completed", {
+              taskId,
+              attempts: attempts + 1,
+              totalTime: `${(attempts * POLLING_INTERVAL) / 1000} seconds`,
+            });
             return videoUrl;
           }
           throw new Error("No video URL found in completed task");
@@ -93,7 +109,7 @@ async function pollForCompletion(taskId: string): Promise<string> {
         throw new Error("Task failed");
       }
 
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL));
       attempts++;
     } catch (error) {
       logger.error("Error checking task status", {
@@ -105,21 +121,34 @@ async function pollForCompletion(taskId: string): Promise<string> {
     }
   }
 
-  throw new Error("Video generation timed out");
+  throw new Error(
+    `Video generation timed out after ${
+      (MAX_POLLING_ATTEMPTS * POLLING_INTERVAL) / 1000
+    } seconds`
+  );
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const body: KlingVideoRequest = await req.json();
-    logger.info("Starting Kling video generation", { prompt: body.prompt });
+    const body = await request.json();
+    let { prompt, duration = DEFAULT_DURATION, aspect_ratio = "9:16" } = body;
 
-    // Basic validation
-    if (!body.prompt) {
+    // Validate and normalize duration
+    duration = Number(duration) || DEFAULT_DURATION;
+    duration = Math.max(MIN_DURATION, Math.min(duration, MAX_DURATION));
+
+    if (!prompt) {
       return NextResponse.json(
         { error: "Prompt is required" },
         { status: 400 }
       );
     }
+
+    logger.info("Starting video generation", {
+      prompt,
+      duration,
+      aspect_ratio,
+    });
 
     // Ensure the klingVideo directory exists
     const videoDir = path.join(process.cwd(), "public", "klingVideo");
@@ -134,13 +163,13 @@ export async function POST(req: NextRequest) {
         model: "kling",
         task_type: "video_generation",
         input: {
-          prompt: body.prompt,
-          negative_prompt: body.negative_prompt || "",
+          prompt,
+          negative_prompt: "blurry, low quality, distorted",
           cfg_scale: 0.5,
-          duration: body.duration || 5,
-          aspect_ratio: body.aspect_ratio || "9:16",
-          mode: body.mode || "std",
-          version: body.version || "1.6",
+          duration,
+          aspect_ratio,
+          mode: "std",
+          version: "1.6",
         },
       },
       {
@@ -167,44 +196,26 @@ export async function POST(req: NextRequest) {
 
     // Generate unique filename with timestamp
     const timestamp = Date.now();
-    const videoFileName = `kling_video_${timestamp}.mp4`;
-    const videoPath = path.join(videoDir, videoFileName);
+    const fileName = `kling_video_${timestamp}.mp4`;
+    const filePath = path.join(videoDir, fileName);
 
-    // Download and save the video with retries
-    let downloadAttempts = 0;
-    const maxDownloadAttempts = 3;
-
-    while (downloadAttempts < maxDownloadAttempts) {
-      try {
-        await downloadVideo(videoUrl, videoPath);
-        break;
-      } catch (downloadError) {
-        downloadAttempts++;
-        if (downloadAttempts === maxDownloadAttempts) {
-          throw new Error("Failed to download video after multiple attempts");
-        }
-        // Wait before retrying
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-    }
-
-    // Verify file exists and has size
-    if (!fs.existsSync(videoPath) || fs.statSync(videoPath).size === 0) {
-      throw new Error("Video file was not saved properly");
-    }
+    // Download the video
+    await downloadVideo(videoUrl, filePath);
 
     return NextResponse.json({
-      status: "success",
-      message: "Video generated and saved successfully",
-      videoPath: `/klingVideo/${videoFileName}`,
+      success: true,
+      videoPath: `/klingVideo/${fileName}`,
       taskId,
     });
   } catch (error) {
-    logger.error("Error in generateKlingVideo", {
+    logger.error("Error in video generation", {
       error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
     });
+
     return NextResponse.json(
       {
+        success: false,
         error: "Failed to generate video",
         details: error instanceof Error ? error.message : "Unknown error",
       },

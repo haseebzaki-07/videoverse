@@ -35,6 +35,7 @@
     "shadcn": "^2.3.0",
     "shadcn-ui": "^0.9.4",
     "shotstack-sdk": "^0.2.9",
+    "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.0.5",

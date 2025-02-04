@@ -2,44 +2,18 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Music2 } from "lucide-react";
-import { toast } from "react-hot-toast";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-
-const defaultSongs = [
-  {
-    id: "upbeat",
-    name: "Upbeat Pop",
-    path: "/defaultSongs/upbeat-pop.mp3",
-  },
-  {
-    id: "cinematic",
-    name: "Cinematic Epic",
-    path: "/defaultSongs/cinematic-epic.mp3",
-  },
-  {
-    id: "ambient",
-    name: "Ambient Chill",
-    path: "/defaultSongs/ambient-chill.mp3",
-  },
-];
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function GenerateWithKling() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [selectedSong, setSelectedSong] = useState("");
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
 
   const updateProgress = (percent: number, text: string) => {
@@ -48,75 +22,115 @@ export default function GenerateWithKling() {
   };
 
   const handleGenerate = async () => {
+    if (!prompt.trim()) {
+      toast.error("Please enter a prompt");
+      return;
+    }
+
     try {
       setLoading(true);
       setGeneratedVideo(null);
-      updateProgress(0, "Starting video generation...");
+      updateProgress(0, "Starting generation process...");
 
-      // First generate the video
-      updateProgress(10, "Generating AI video...");
+      // Step 1: Analyze prompt and fetch music
+      updateProgress(20, "Analyzing prompt and fetching music...");
+      console.log("Step 1: Sending prompt to analyzeKlingPrompt:", { prompt });
+
+      const musicResponse = await fetch("/api/analyzeKlingPrompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!musicResponse.ok) {
+        const error = await musicResponse.json();
+        throw new Error(
+          error.details || error.error || "Failed to fetch music"
+        );
+      }
+
+      const musicData = await musicResponse.json();
+      console.log("Music data received:", musicData);
+
+      if (!musicData.success || !musicData.data?.music?.sound?.localPath) {
+        console.error("Invalid music data:", musicData);
+        throw new Error("Invalid music data received");
+      }
+
+      const musicPath = musicData.data.music.sound.localPath;
+      console.log("Music saved at:", musicPath);
+      updateProgress(40, "Music fetched and saved successfully!");
+
+      // Step 2: Generate video
+      updateProgress(60, "Generating AI video...");
+      console.log("Step 2: Sending prompt to generateKlingVideo");
+
       const videoResponse = await fetch("/api/generateKlingVideo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt,
-          duration: 5,
+          duration: 10, // Increased duration for better results
           aspect_ratio: "9:16",
         }),
       });
 
       if (!videoResponse.ok) {
         const error = await videoResponse.json();
-        throw new Error(error.error || "Failed to generate video");
+        throw new Error(
+          error.details || error.error || "Failed to generate video"
+        );
       }
 
       const videoData = await videoResponse.json();
-      updateProgress(50, "Video generated! Processing audio...");
+      console.log("Video data received:", videoData);
 
-      // Upload the selected song
-      const selectedSongPath = defaultSongs.find(
-        (song) => song.id === selectedSong
-      )?.path;
-
-      if (!selectedSongPath) {
-        throw new Error("No song selected");
+      if (!videoData.videoPath) {
+        console.error("Invalid video data:", videoData);
+        throw new Error("No video path received from video generation");
       }
 
-      updateProgress(60, "Uploading music...");
-      const songResponse = await fetch(selectedSongPath);
-      const songBlob = await songResponse.blob();
+      const videoPath = videoData.videoPath;
+      console.log("Video saved at:", videoPath);
+      updateProgress(80, "Video generated successfully!");
 
-      const formData = new FormData();
-      formData.append("audio", songBlob, "selected_song.mp3");
-
-      const uploadResponse = await fetch("/api/uploadKlingMusic", {
-        method: "POST",
-        body: formData,
+      // Step 3: Merge video and music
+      updateProgress(90, "Creating final music video...");
+      console.log("Step 3: Sending paths to generateKlingMusicVideo", {
+        videoPath,
+        musicPath,
       });
 
-      if (!uploadResponse.ok) {
-        const error = await uploadResponse.json();
-        throw new Error(error.error || "Failed to upload music");
-      }
-
-      updateProgress(80, "Merging video and audio...");
-      // Finally, merge video and audio
       const mergeResponse = await fetch("/api/generateKlingMusicVideo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}), // Use latest files
+        body: JSON.stringify({
+          videoPath: videoPath,
+          musicPath: musicPath,
+        }),
       });
 
       if (!mergeResponse.ok) {
         const error = await mergeResponse.json();
-        throw new Error(error.error || "Failed to generate music video");
+        throw new Error(
+          error.details || error.error || "Failed to generate music video"
+        );
       }
 
       const mergeData = await mergeResponse.json();
+      console.log("Merge response received:", mergeData);
+
+      if (!mergeData.videoPath) {
+        console.error("Invalid merge data:", mergeData);
+        throw new Error("No final video path received from merge operation");
+      }
+
       updateProgress(100, "Video ready!");
       setGeneratedVideo(mergeData.videoPath);
-      toast.success("Video generated successfully!");
+      console.log("Final video path:", mergeData.videoPath);
+      toast.success("Music video generated successfully!");
     } catch (error) {
+      console.error("Generation error:", error);
       toast.error(
         error instanceof Error ? error.message : "Something went wrong"
       );
@@ -150,29 +164,6 @@ export default function GenerateWithKling() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Select background music</Label>
-            <Select
-              value={selectedSong}
-              onValueChange={setSelectedSong}
-              disabled={loading}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a song" />
-              </SelectTrigger>
-              <SelectContent>
-                {defaultSongs.map((song) => (
-                  <SelectItem key={song.id} value={song.id}>
-                    <div className="flex items-center gap-2">
-                      <Music2 className="h-4 w-4" />
-                      <span>{song.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {loading && (
             <div className="space-y-2">
               <Progress value={progress} className="w-full" />
@@ -183,7 +174,7 @@ export default function GenerateWithKling() {
           )}
 
           <Button
-            disabled={loading || !prompt || !selectedSong}
+            disabled={loading || !prompt.trim()}
             onClick={handleGenerate}
             className="w-full"
           >
