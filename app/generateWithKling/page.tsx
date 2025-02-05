@@ -160,9 +160,9 @@ export default function GenerateWithKling() {
 
   return (
     <div className="px-4 lg:px-8">
-      <div className="mb-8 space-y-4">
-        <h2 className="text-2xl md:text-4xl font-bold text-center">
-          Generate AI Video with Music
+      <div className="mb-8 space-y-4 mt-8">
+        <h2 className="text-2xl md:text-4xl font-bold text-center bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
+          Generate AI Music-Video
         </h2>
         <p className="text-muted-foreground font-light text-sm md:text-lg text-center">
           Turn your imagination into stunning videos with Kling AI

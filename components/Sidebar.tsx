@@ -39,10 +39,10 @@ export default function Sidebar() {
       </div>
       <nav className="flex flex-col gap-2 border-t border-b border-gray-300 pt-2 pb-2">
         <Link href="/musicVideoGenerator" className="nav-link">
-          Generate Video
+          Generate Tik-Tok Video
         </Link>
-        <Link href="/my-creations" className="nav-link">
-          My Creations
+        <Link href="/generateWithKling" className="nav-link">
+          Generate AI Music-Video
         </Link>
         <Link href="/generateWithAI" className="nav-link">
           Edit with AI
