@@ -14,12 +14,18 @@ interface MusicVideoRequest {
 
 async function getLatestFile(
   directory: string,
-  prefix: string
+  prefix: string,
+  isFreesound: boolean = false
 ): Promise<string | null> {
   try {
     const files = fs
       .readdirSync(directory)
-      .filter((file) => file.startsWith(prefix))
+      .filter((file) => {
+        if (isFreesound) {
+          return file.startsWith("freesound_");
+        }
+        return file.startsWith(prefix);
+      })
       .map((file) => ({
         name: file,
         time: fs.statSync(path.join(directory, file)).mtime.getTime(),
@@ -31,6 +37,7 @@ async function getLatestFile(
     logger.error("Error getting latest file", {
       directory,
       prefix,
+      isFreesound,
       error: error instanceof Error ? error.message : "Unknown error",
     });
     return null;
@@ -58,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     // Get the directories
     const videoDir = path.join(process.cwd(), "public", "klingVideo");
-    const audioDir = path.join(process.cwd(), "public", "klingMusic");
+    const audioDir = path.join(process.cwd(), "public", "freesound");
     const outputDir = path.join(process.cwd(), "public", "klingMusicVideo");
 
     // Ensure output directory exists
@@ -83,12 +90,21 @@ export async function POST(req: NextRequest) {
         fs.readdirSync(audioDir).find((file) => file.includes(body.audioId!)) ||
         null;
     } else {
-      audioFile = await getLatestFile(audioDir, "kling_music_");
+      audioFile = await getLatestFile(audioDir, "freesound_", true);
     }
 
     if (!videoFile || !audioFile) {
+      logger.error("Files not found", {
+        videoFile,
+        audioFile,
+        videoDir,
+        audioDir,
+      });
       return NextResponse.json(
-        { error: "Video or audio file not found" },
+        {
+          error: "Video or audio file not found",
+          details: { videoFile, audioFile },
+        },
         { status: 404 }
       );
     }
@@ -98,8 +114,22 @@ export async function POST(req: NextRequest) {
 
     // Verify files exist
     if (!fs.existsSync(videoPath) || !fs.existsSync(audioPath)) {
+      logger.error("File paths do not exist", {
+        videoPath,
+        audioPath,
+        videoExists: fs.existsSync(videoPath),
+        audioExists: fs.existsSync(audioPath),
+      });
       return NextResponse.json(
-        { error: "Video or audio file does not exist" },
+        {
+          error: "Video or audio file does not exist",
+          details: {
+            videoPath,
+            audioPath,
+            videoExists: fs.existsSync(videoPath),
+            audioExists: fs.existsSync(audioPath),
+          },
+        },
         { status: 404 }
       );
     }
@@ -116,8 +146,8 @@ export async function POST(req: NextRequest) {
     const outputFileName = `kling_music_video_${timestamp}.mp4`;
     const outputPath = path.join(outputDir, outputFileName);
 
-    // Construct FFmpeg command
-    const ffmpegCommand = `ffmpeg -i "${videoPath}" -i "${audioPath}" -t ${targetDuration} -map 0:v -map 1:a -c:v copy -c:a aac -shortest "${outputPath}"`;
+    // Construct FFmpeg command with improved audio handling
+    const ffmpegCommand = `ffmpeg -i "${videoPath}" -i "${audioPath}" -t ${targetDuration} -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest "${outputPath}"`;
 
     try {
       const { stdout, stderr } = await execAsync(ffmpegCommand);
@@ -135,6 +165,8 @@ export async function POST(req: NextRequest) {
         videoDuration,
         audioDuration,
         targetDuration,
+        videoFile,
+        audioFile,
       });
 
       return NextResponse.json({

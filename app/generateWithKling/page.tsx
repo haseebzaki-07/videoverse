@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Loader2 } from "lucide-react";
+import { Loader2, History } from "lucide-react";
 import { toast } from "sonner";
 
 export default function GenerateWithKling() {
@@ -20,6 +20,25 @@ export default function GenerateWithKling() {
     setProgress(percent);
     setProgressText(text);
   };
+
+  const handleShowLatestVideo = useCallback(async () => {
+    try {
+      const response = await fetch("/api/getLatestKlingVideo");
+      if (!response.ok) {
+        throw new Error("Failed to fetch latest video");
+      }
+      const data = await response.json();
+      if (data.videoPath) {
+        setGeneratedVideo(data.videoPath);
+        toast.success("Showing latest generated video");
+      } else {
+        toast.error("No previous videos found");
+      }
+    } catch (error) {
+      toast.error("Failed to load previous video");
+      console.error("Error loading latest video:", error);
+    }
+  }, []);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -70,7 +89,6 @@ export default function GenerateWithKling() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt,
-          duration: 10, // Increased duration for better results
           aspect_ratio: "9:16",
         }),
       });
@@ -173,32 +191,60 @@ export default function GenerateWithKling() {
             </div>
           )}
 
-          <Button
-            disabled={loading || !prompt.trim()}
-            onClick={handleGenerate}
-            className="w-full"
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Processing...
-              </div>
-            ) : (
-              "Generate Video"
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              disabled={loading || !prompt.trim()}
+              onClick={handleGenerate}
+              className="flex-1"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing...
+                </div>
+              ) : (
+                "Generate Video"
+              )}
+            </Button>
+            <Button
+              onClick={handleShowLatestVideo}
+              variant="outline"
+              className="flex items-center gap-2"
+              disabled={loading}
+            >
+              <History className="h-4 w-4" />
+              Previous Edit
+            </Button>
+          </div>
         </Card>
 
         {generatedVideo && (
           <Card className="p-6 mt-8">
-            <div className="aspect-[9/16] relative">
-              <video
-                src={generatedVideo}
-                controls
-                className="rounded-lg w-full h-full"
-                autoPlay
-                playsInline
-              />
+            <div className="flex justify-center items-center">
+              <div className="w-full max-w-[350px]">
+                <div
+                  className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden"
+                  style={{
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  <video
+                    src={generatedVideo}
+                    controls
+                    controlsList="nodownload noremoteplayback"
+                    disablePictureInPicture
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-contain"
+                    autoPlay
+                    onLoadedMetadata={(e) => {
+                      const video = e.target as HTMLVideoElement;
+                      if (video.videoHeight > video.videoWidth) {
+                        video.style.setProperty("object-fit", "contain");
+                      }
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </Card>
         )}
