@@ -68,7 +68,7 @@ export default function VideoGenerator() {
       });
 
       const analyzeResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/analyzeText`,
+        `/api/analyzeText`,
         {
           topic,
           style,
@@ -110,7 +110,7 @@ export default function VideoGenerator() {
 
       // Step 1: Analyze the prompt first
       const promptAnalysis = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/analyzePrompt`,
+        `/api/analyzePrompt`,
         { prompt: userPrompt }
       );
 
@@ -120,7 +120,7 @@ export default function VideoGenerator() {
 
       // Step 2: Use the analyzed data for text analysis
       const analyzeResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/analyzeText`,
+        `/api/analyzeText`,
         {
           topic: promptAnalysis.data.topic || "General",
           style: promptAnalysis.data.style || "Cinematic",
@@ -169,7 +169,7 @@ export default function VideoGenerator() {
     try {
       logger.info("Starting video clips generation");
       const clipsResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/generateClips`,
+        `/api/generateClips`,
         {
           style: style || "Cinematic",
           topic,
@@ -183,7 +183,7 @@ export default function VideoGenerator() {
 
       logger.info("Starting TTS process");
       const ttsResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/tts`,
+        `/api/tts`,
         {
           text: speech,
           languageCode: selectedLanguage || "en-US",
@@ -198,7 +198,7 @@ export default function VideoGenerator() {
 
       logger.info("Starting final video creation");
       const videoResponse = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/createMusicVideo`
+        `/api/createMusicVideo`
       );
 
       if (videoResponse.data?.videoUrl) {

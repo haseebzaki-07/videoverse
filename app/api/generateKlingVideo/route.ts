@@ -170,6 +170,13 @@ export async function POST(request: NextRequest) {
       fs.mkdirSync(videoDir, { recursive: true });
     }
 
+    // Clear existing files in the klingVideo directory
+    const existingFiles = fs.readdirSync(videoDir);
+    for (const file of existingFiles) {
+      fs.unlinkSync(path.join(videoDir, file));
+    }
+    logger.info("Cleared existing files from klingVideo directory");
+
     // Create task request
     const createTaskResponse = await axios.post<KlingAPIResponse>(
       `${KLING_API_BASE_URL}/task`,
@@ -208,9 +215,8 @@ export async function POST(request: NextRequest) {
     const videoUrl = await pollForCompletion(taskId);
     logger.info("Video URL received", { videoUrl });
 
-    // Generate unique filename with timestamp
-    const timestamp = Date.now();
-    const fileName = `kling_video_${timestamp}.mp4`;
+    // Use simple filename without timestamp
+    const fileName = `kling_video.mp4`;
     const filePath = path.join(videoDir, fileName);
 
     // Download the video

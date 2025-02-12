@@ -40,6 +40,15 @@ interface SongQuery {
   limit?: number;
 }
 
+// Add default keywords for fallback sounds
+const DEFAULT_SOUNDS = [
+  "ambient electronic music",
+  "cinematic background",
+  "atmospheric music",
+  "gentle background music",
+  "soft instrumental",
+];
+
 async function downloadAndSaveSound(
   url: string,
   outputPath: string
@@ -153,7 +162,7 @@ export async function POST(request: NextRequest) {
     const body: SongQuery = await request.json();
     const {
       keywords,
-      duration,
+      duration = { min: 5 }, // Ensure minimum duration of 5 seconds
       type = "music",
       sort = "rating_desc",
       limit = 5,
@@ -169,6 +178,13 @@ export async function POST(request: NextRequest) {
       fs.mkdirSync(soundDir, { recursive: true });
     }
 
+    // Clear existing files in the freesound directory
+    const existingFiles = fs.readdirSync(soundDir);
+    for (const file of existingFiles) {
+      fs.unlinkSync(path.join(soundDir, file));
+    }
+    logger.info("Cleared existing files from freesound directory");
+
     // Function to make a search request with given parameters
     async function searchFreesound(
       searchQuery: string,
@@ -180,15 +196,20 @@ export async function POST(request: NextRequest) {
         "fields",
         "id,name,duration,previews,tags,license,url,type,download,username,description,avg_rating,num_ratings"
       );
-      if (searchFilter) {
-        searchUrl.searchParams.append("filter", searchFilter);
-      }
+
+      // Add duration filter to ensure sounds are at least 5 seconds
+      const durationFilter = "duration:[5 TO *]";
+      const combinedFilter = searchFilter
+        ? `${searchFilter} ${durationFilter}`
+        : durationFilter;
+
+      searchUrl.searchParams.append("filter", combinedFilter);
       searchUrl.searchParams.append("page_size", limit.toString());
       searchUrl.searchParams.append("sort", sort);
 
       logger.info("Attempting Freesound search", {
         searchQuery,
-        searchFilter,
+        combinedFilter,
         searchUrl: searchUrl.toString(),
       });
 
@@ -235,11 +256,13 @@ export async function POST(request: NextRequest) {
       data = await searchFreesound(query3);
     }
 
-    // Strategy 4: If all else fails, try a very broad search
+    // Strategy 4: If all else fails, try default sounds one by one
     if (!data) {
-      const query4 = "music";
-      searchAttempts.push({ strategy: "broad_search", query: query4 });
-      data = await searchFreesound(query4, "type:music");
+      for (const defaultSound of DEFAULT_SOUNDS) {
+        searchAttempts.push({ strategy: "default_sound", query: defaultSound });
+        data = await searchFreesound(defaultSound, "type:music");
+        if (data) break;
+      }
     }
 
     if (!data || !data.results.length) {
@@ -256,12 +279,12 @@ export async function POST(request: NextRequest) {
     const selectedSound = data.results[0];
 
     // Generate a safe filename
-    const timestamp = Date.now();
     const safeName = selectedSound.name
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "_")
+      .replace(/_\d+$/, "")
       .substring(0, 50);
-    const fileName = `freesound_${safeName}_${timestamp}.mp3`;
+    const fileName = `${safeName}.mp3`;
     const filePath = path.join(soundDir, fileName);
 
     // Download and save the preview file

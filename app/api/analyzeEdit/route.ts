@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
 
     // Forward the request to the video editor API
     const editorResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/videoEditor`,
+      `/api/videoEditor`,
       {
         method: "POST",
         headers: {
