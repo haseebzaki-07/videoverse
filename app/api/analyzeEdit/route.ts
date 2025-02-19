@@ -166,78 +166,17 @@ export async function POST(req: NextRequest) {
       editRequest = generateDefaultRequest(body.clips);
     }
 
-    // Update the logging before making the request to videoEditor
-    logger.info("Sending request to video editor API:", {
-      requestBody: JSON.stringify({
-        clips: editRequest.clips.map((clip) => ({
-          fileName: clip.fileName,
-          duration: clip.duration,
-        })),
-        audio: {
-          volume: editRequest.audio?.volume || 1,
-          fadeIn: editRequest.audio?.fadeIn || 2,
-          fadeOut: editRequest.audio?.fadeOut || 2,
-          bass: editRequest.audio?.bass || 2,
-          treble: editRequest.audio?.treble || 1,
-          normalize: editRequest.audio?.normalize || true,
-        },
-        output: {
-          format: editRequest.output.format,
-          resolution: editRequest.output.resolution,
-          fps: editRequest.output.fps,
-          quality: editRequest.output.quality,
-        },
-        effects: {
-          transition: {
-            type: editRequest.effects?.transition?.type || "fade",
-            duration: editRequest.effects?.transition?.duration || 1,
-          },
-          colorAdjustment: {
-            brightness:
-              editRequest.effects?.colorAdjustment?.brightness || 0.05,
-            contrast: editRequest.effects?.colorAdjustment?.contrast || 1.1,
-            saturation:
-              editRequest.effects?.colorAdjustment?.saturation || 1.05,
-            gamma: editRequest.effects?.colorAdjustment?.gamma || 1,
-            vibrance: editRequest.effects?.colorAdjustment?.vibrance || 1.1,
-          },
-          speed: editRequest.effects?.speed || 1,
-        },
-        finalFilter: editRequest.finalFilter,
-      }),
-    });
-
-    // Forward the request to the video editor API
-    const editorResponse = await fetch(
-      "http://localhost:3000/api/videoEditorRoute",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(editRequest),
-      }
-    );
-
-    if (!editorResponse.ok) {
-      const errorData = await editorResponse.json();
-      throw new Error(
-        `Video editor API request failed: ${JSON.stringify(errorData)}`
-      );
-    }
-
-    const result = await editorResponse.json();
+    // Return the edit request without calling the video editor
     return NextResponse.json({
       status: "success",
       editRequest,
-      result,
     });
   } catch (error) {
     logger.error("Error in analyzeEdit", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
     return NextResponse.json(
-      { error: "Failed to analyze and process edit request" },
+      { error: "Failed to analyze edit request" },
       { status: 500 }
     );
   }

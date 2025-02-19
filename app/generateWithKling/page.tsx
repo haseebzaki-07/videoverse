@@ -23,17 +23,10 @@ export default function GenerateWithKling() {
 
   const handleShowLatestVideo = useCallback(async () => {
     try {
-      const response = await fetch("/api/getLatestKlingVideo");
-      if (!response.ok) {
-        throw new Error("Failed to fetch latest video");
-      }
-      const data = await response.json();
-      if (data.videoPath) {
-        setGeneratedVideo(data.videoPath);
-        toast.success("Showing latest generated video");
-      } else {
-        toast.error("No previous videos found");
-      }
+      // Directly set the video path to the static file
+      const staticVideoPath = "/klingVideo/kling_video.mp4";
+      setGeneratedVideo(staticVideoPath);
+      toast.success("Showing latest generated video");
     } catch (error) {
       toast.error("Failed to load previous video");
       console.error("Error loading latest video:", error);
