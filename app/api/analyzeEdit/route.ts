@@ -53,6 +53,7 @@ const DEFAULT_VALUES = {
 
 interface PromptRequest {
   prompt: string;
+  clips: Clip[];
 }
 
 // Define interface for clip structure
@@ -64,7 +65,7 @@ interface Clip {
 
 export async function POST(req: NextRequest) {
   try {
-    const body: PromptRequest = await req.json();
+    const body = await req.json();
     logger.info("Analyzing edit prompt", { prompt: body.prompt });
 
     if (!body.prompt) {
@@ -74,21 +75,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!body.clips || !Array.isArray(body.clips) || body.clips.length === 0) {
+      return NextResponse.json(
+        { error: "At least one video clip is required" },
+        { status: 400 }
+      );
+    }
+
     // Update the system message for OpenAI
     const systemMessage = `You are a video editing assistant. Analyze the user's prompt and generate a detailed video editing request.
-    The request should include appropriate transitions, text overlays, videofilters, color adjustments, effects, speed and audio settings.
+    The request should include appropriate transitions, effects, and settings.
     
-    You can select one of the following video filters based on the user's prompt or mood:
-    - "enhance": Enhances overall video quality with balanced contrast and saturation
-    - "dramatic": Creates a strong contrast effect for dramatic scenes
-    - "warm": Adds a warm color temperature
-    - "cool": Adds a cool color temperature
-    - "dreamy": Creates a soft, dream-like effect
-    - "sharp": Enhances details and sharpness
-    - "sketch": Creates an artistic sketch-like effect
-    - "vignette": Adds a vignette effect to the video
-
-    If the user's prompt doesn't specify a particular mood or style, randomly select one that might enhance the video.
+    Important: Do not modify the clip filenames or their order. Use the provided clips array and maintain their sequence.
+    Each clip should be 5 seconds long unless explicitly specified in the prompt.
+    
+    The clips array will be provided in the request. Maintain these clips and their order in your response.
     
     Generate a JSON response that matches the VideoEditor API requirements with the following structure:
     {
@@ -128,12 +129,17 @@ export async function POST(req: NextRequest) {
       "finalFilter": string
     }`;
 
-    // Call OpenAI API
+    // Call OpenAI API with the updated system message
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         { role: "system", content: systemMessage },
-        { role: "user", content: body.prompt },
+        {
+          role: "user",
+          content: `Prompt: ${body.prompt}\nClips: ${JSON.stringify(
+            body.clips
+          )}`,
+        },
       ],
       temperature: 0.7,
       max_tokens: 1000,
@@ -147,13 +153,17 @@ export async function POST(req: NextRequest) {
         throw new Error("No response from OpenAI");
       }
 
-      // Parse the AI response and merge with defaults
       const parsedResponse = JSON.parse(aiResponse);
+
+      // Ensure we use the original clips array if AI doesn't provide valid clips
+      if (!parsedResponse.clips || !Array.isArray(parsedResponse.clips)) {
+        parsedResponse.clips = body.clips;
+      }
+
       editRequest = mergeWithDefaults(parsedResponse);
-      console.log("editRequest", editRequest);
     } catch (parseError) {
       logger.error("Error parsing OpenAI response", { error: parseError });
-      editRequest = generateDefaultRequest();
+      editRequest = generateDefaultRequest(body.clips);
     }
 
     // Update the logging before making the request to videoEditor
@@ -199,7 +209,7 @@ export async function POST(req: NextRequest) {
 
     // Forward the request to the video editor API
     const editorResponse = await fetch(
-      `/api/videoEditor`,
+      "http://localhost:3000/api/videoEditorRoute",
       {
         method: "POST",
         headers: {
@@ -235,23 +245,13 @@ export async function POST(req: NextRequest) {
 
 // Update mergeWithDefaults function
 function mergeWithDefaults(aiResponse: any) {
-  // Handle dynamic clip durations if specified in AI response
-  const defaultClips = [
-    { fileName: "video_1.mp4", duration: 5 },
-    { fileName: "video_2.mp4", duration: 5 },
-    { fileName: "video_3.mp4", duration: 5 },
-    { fileName: "video_4.mp4", duration: 5 },
-    { fileName: "video_5.mp4", duration: 5 },
-  ];
-
-  // If AI response includes clips with durations, merge them with defaults
-  const clips = aiResponse.clips?.length
-    ? aiResponse.clips.map((clip: Clip, index: number) => ({
-        fileName: `video_${index + 1}.mp4`,
-        duration: clip.duration || defaultClips[index].duration,
-        startTime: clip.startTime,
-      }))
-    : defaultClips;
+  // Use the clips from the request instead of default clips
+  const clips =
+    aiResponse.clips?.map((clip: Clip) => ({
+      fileName: clip.fileName,
+      duration: clip.duration || 5, // Use 5 seconds if no duration specified
+      startTime: clip.startTime || 0,
+    })) || [];
 
   // Handle dynamic resolution if specified in AI response
   const resolution = aiResponse.output?.resolution || DEFAULT_VALUES.resolution;
@@ -369,22 +369,12 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 // Update generateDefaultRequest function
-function generateDefaultRequest() {
-  const defaultClips = [
-    { fileName: "video_1.mp4", duration: 5 },
-    { fileName: "video_2.mp4", duration: 5 },
-    { fileName: "video_3.mp4", duration: 5 },
-    { fileName: "video_4.mp4", duration: 5 },
-    { fileName: "video_5.mp4", duration: 5 },
-  ];
-
-  // Select a random default filter and get its value
-  const filterKeys = Object.keys(DEFAULT_VALUES.videoFilters) as VideoFilter[];
-  const randomKey = filterKeys[Math.floor(Math.random() * filterKeys.length)];
-  const randomFilter = DEFAULT_VALUES.videoFilters[randomKey];
-
+function generateDefaultRequest(clips: Clip[]) {
   return {
-    clips: defaultClips,
+    clips: clips.map((clip) => ({
+      ...clip,
+      duration: clip.duration || 5, // Ensure 5 second default duration
+    })),
     audio: DEFAULT_VALUES.audio,
     output: {
       format: "mp4",
@@ -400,6 +390,6 @@ function generateDefaultRequest() {
       colorAdjustment: DEFAULT_VALUES.colorAdjustment,
       speed: 1.0,
     },
-    finalFilter: randomFilter,
+    finalFilter: DEFAULT_VALUES.videoFilters.enhance,
   };
 }

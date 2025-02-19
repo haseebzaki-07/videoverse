@@ -26,6 +26,7 @@
   border-radius: 8px;
   overflow: hidden;
   transition: border-color 0.3s;
+  color: #ffffff;
 }
 
 .styleOption.selected {
