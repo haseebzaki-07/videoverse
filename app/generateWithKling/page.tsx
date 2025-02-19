@@ -24,7 +24,7 @@ export default function GenerateWithKling() {
   const handleShowLatestVideo = useCallback(async () => {
     try {
       // Directly set the video path to the static file
-      const staticVideoPath = "/klingVideo/kling_video.mp4";
+      const staticVideoPath = "/klingMusicVideo/kling_music_video.mp4";
       setGeneratedVideo(staticVideoPath);
       toast.success("Showing latest generated video");
     } catch (error) {
